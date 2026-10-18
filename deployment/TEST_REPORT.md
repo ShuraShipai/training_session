@@ -13,7 +13,7 @@ Updated 2026-10-18.
 
 - Added continuous browser camera video with `streamlit-webrtc`; YOLO inference is throttled to roughly three frames per second and uses the unchanged `best.pt` and inference defaults.
 - Exactly two valid detections at or above 60% confidence are required. Detections are ordered left-to-right for Player 1 and Player 2. Pressing **Play Round** deliberately scores once; replay and reset are supported. The live frames themselves never award points.
-- Added `streamlit-webrtc==0.70.1` to root dependencies. HTTPS and browser camera permission are required. The configured public Google STUN service may not work on every restricted network; some networks require TURN.
+- Added `streamlit-webrtc==0.70.1` and aligned the Streamlit pin to `1.51.0` (the WebRTC release requires Streamlit 1.51 or later). The first Cloud install failed because the old Streamlit 1.50 pin conflicted; this compatibility fix is local and still needs to be pushed. HTTPS and browser camera permission are required. The configured public Google STUN service may not work on every restricted network; some networks require TURN.
 - All 20 local offline tests pass, including all two-player outcomes, invalid/ambiguous gesture rejection, duplicate-round prevention, replay, reset, and UI rendering. Python compilation passes when `PYTHONPYCACHEPREFIX` is directed to `/tmp`.
 - Live WebRTC/browser camera and two simultaneous hand inference have not yet been verified against the deployed update. After the code is pushed, test the camera permission, both live labels, each round result, replay, and reset at the public URL.
 
