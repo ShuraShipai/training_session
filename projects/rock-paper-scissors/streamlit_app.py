@@ -28,7 +28,7 @@ def detect(data):
     frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
     if frame is None:
         raise ValueError("Could not decode the captured image")
-    result = load_model()(frame)[0]
+    result = load_model()(frame, imgsz=768, verbose=False)[0]
     detections = [(result.names[int(box.cls.item())], float(box.conf.item())) for box in result.boxes]
     return detections, result.plot()
 
@@ -83,7 +83,7 @@ else:
             for label, confidence in detections:
                 st.write(f"Detected: **{label}** · confidence {confidence:.0%}")
             if valid_detection(detections) is None:
-                st.warning("Need exactly one valid gesture at or above 60% confidence. No points awarded.")
+                st.warning(f"Need exactly one valid gesture at or above {MIN_CONFIDENCE:.0%} confidence. No points awarded.")
             if st.button("Confirm round", disabled=valid_detection(detections) is None):
                 # The completed flag and round id make this a one-result-per-round action.
                 if game.confirm(detections, preview[0]):

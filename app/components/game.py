@@ -5,7 +5,9 @@ import secrets
 from typing import Optional
 
 MOVES = ("Rock", "Paper", "Scissors")
-MIN_CONFIDENCE = 0.60
+# The preserved checkpoint returns the second hand at ~0.27–0.50 confidence
+# on the user's actual camera view. A 0.60 gate discarded valid gestures.
+MIN_CONFIDENCE = 0.25
 
 
 def winner(player, computer):
@@ -30,20 +32,28 @@ def valid_detection(detections):
 
 
 def valid_pair(detections):
-    """Return two confident gestures ordered left-to-right, or reject the frame."""
-    valid = []
+    """Pick the strongest confident gesture in each player lane.
+
+    A YOLO frame may contain extra low-confidence or overlapping class boxes for
+    the same hand. Requiring exactly two raw boxes made otherwise usable frames
+    fail. Filter candidates, then choose the strongest detection independently
+    on each side of the visible center line.
+    """
+    lanes = {"left": [], "right": []}
     for detection in detections:
         if len(detection) != 3:
-            return None
+            continue
         label, confidence, center_x = detection
         if (label not in MOVES or not math.isfinite(confidence)
                 or not MIN_CONFIDENCE <= confidence <= 1
                 or not math.isfinite(center_x) or not 0 <= center_x <= 1):
-            return None
-        valid.append((label, confidence, center_x))
-    if len(valid) != 2 or abs(valid[0][2] - valid[1][2]) < 0.05:
+            continue
+        lane = "left" if center_x < 0.5 else "right"
+        lanes[lane].append((label, confidence, center_x))
+    if not lanes["left"] or not lanes["right"]:
         return None
-    left, right = sorted(valid, key=lambda item: item[2])
+    left = max(lanes["left"], key=lambda item: item[1])
+    right = max(lanes["right"], key=lambda item: item[1])
     return (left[0], left[1]), (right[0], right[1])
 
 

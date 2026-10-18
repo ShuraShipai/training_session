@@ -4,7 +4,7 @@ import math
 import secrets
 
 MOVES = ("Rock", "Paper", "Scissors")
-MIN_CONFIDENCE = 0.60
+MIN_CONFIDENCE = 0.25
 
 
 def winner(player, computer):

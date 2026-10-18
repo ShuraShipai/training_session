@@ -20,7 +20,7 @@ class IndependentGameTests(unittest.TestCase):
 
     def test_confidence_and_one_scoring_action_per_round(self):
         game = logic.Game(computer="Scissors")
-        self.assertIsNone(logic.valid_detection([("Rock", 0.59)]))
+        self.assertIsNone(logic.valid_detection([("Rock", 0.24)]))
         self.assertIsNone(logic.valid_detection([("Rock", float("nan"))]))
         self.assertIsNone(logic.valid_detection([("Rock", 0.99), ("Paper", 0.99)]))
         self.assertTrue(game.confirm([("Rock", 0.9)], 0))

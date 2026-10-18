@@ -123,7 +123,10 @@ def detect_live_gestures(frame):
         raise ValueError("Expected a BGR video frame.")
     with inference_lock():
         model = gesture_model()
-        result = model(frame)[0]  # Same model, preprocessing, labels, and inference defaults.
+        # The camera view contains two smaller hands than the original single-hand
+        # training examples. A 768px inference canvas recovers the left gesture on
+        # the user's supplied camera frame without changing weights or labels.
+        result = model(frame, imgsz=768, verbose=False)[0]
         detections = []
         frame_width = frame.shape[1]
         for box in result.boxes:

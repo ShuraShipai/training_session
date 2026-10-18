@@ -9,4 +9,4 @@ python -m pip install -r requirements.txt
 streamlit run streamlit_app.py --server.port 8604
 ```
 
-Click **Start live camera** and allow camera access to Terminal (or the app running Streamlit) in macOS **System Settings → Privacy & Security → Camera**. Player 1 stands on the left and Player 2 on the right of the center divider. When both gestures are detected at 60% confidence or higher, click **Play Round** once. Play Again starts a fresh round; Reset Score clears all totals. The app loads the original `best.pt`, without training or fallback model substitution. Streamlit Cloud cannot access the visitor's laptop camera through OpenCV; run this page locally for camera play.
+Allow browser camera access. Player 1 stands on the left and Player 2 on the right of the center divider. The existing `best.pt` is unchanged; live inference uses a 768-pixel image size and selects the strongest confident detection in each half. Both gestures must reach 25% confidence before **Play Round** is enabled. Play Again starts a fresh round; Reset Score clears all totals.

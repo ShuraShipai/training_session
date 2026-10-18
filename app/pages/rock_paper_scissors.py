@@ -72,7 +72,23 @@ if pair:
     left_col.metric("Player 1 · left", left[0], f"{left[1]:.0%} confidence")
     right_col.metric("Player 2 · right", right[0], f"{right[1]:.0%} confidence")
 elif st.session_state.browser_frame_time and fresh:
-    st.info("Show one clear hand on each side of the center line. Both gestures must be at least 60% confident.")
+    if detections:
+        seen = []
+        for detection in detections:
+            if len(detection) == 3:
+                label, confidence, center_x = detection
+                side = "left" if center_x < 0.5 else "right"
+                seen.append(f"{label} · {confidence:.0%} · {side} side")
+            else:
+                seen.append(f"{detection[0]} · {detection[1]:.0%}")
+        st.warning("YOLO sees: " + " | ".join(seen))
+        st.caption(
+            "A confident gesture is needed in each half. If YOLO returns extra boxes, "
+            f"the strongest box per side is used; confidence threshold is {MIN_CONFIDENCE:.0%}."
+        )
+    else:
+        st.warning("YOLO did not recognize a hand gesture in the latest frame.")
+        st.caption("Move both hands closer to the camera, keep them inside the frame, and improve the lighting.")
 else:
     st.info("Press **Start live camera** in the camera view and allow this site to use your camera.")
 

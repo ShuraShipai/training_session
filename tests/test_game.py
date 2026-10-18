@@ -32,7 +32,7 @@ class GameTests(unittest.TestCase):
         self.assertFalse(game.completed)
 
     def test_invalid_detections_do_not_score(self):
-        for detections in ([], [("Rock", .59)], [("hand", .99)], [("Rock", float("nan"))],
+        for detections in ([], [("Rock", .24)], [("hand", .99)], [("Rock", float("nan"))],
                            [("Rock", float("inf"))], [("Rock", 1.1)], [("Rock", -.1)],
                            [("Rock", .99), ("Paper", .99)]):
             with self.subTest(detections=detections):
@@ -84,10 +84,9 @@ class GameTests(unittest.TestCase):
         invalid_frames = (
             [],
             [("Rock", .95, .2)],
-            [("Rock", .95, .2), ("Paper", .59, .8)],
+            [("Rock", .95, .2), ("Paper", .24, .8)],
             [("Rock", .95, .2), ("Lizard", .99, .8)],
             [("Rock", .95, .4), ("Paper", .9, .42)],
-            [("Rock", .95, .2), ("Paper", .9, .8), ("Scissors", .9, .6)],
         )
         for detections in invalid_frames:
             with self.subTest(detections=detections):
@@ -95,6 +94,17 @@ class GameTests(unittest.TestCase):
                 self.assertIsNone(valid_pair(detections))
                 self.assertFalse(game.confirm(detections, game.round_id))
                 self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
+
+    def test_live_pair_uses_strongest_confident_box_in_each_lane(self):
+        # Extra YOLO boxes can be duplicate/overlapping class hypotheses for a
+        # hand. Keep the strongest candidate in each player half.
+        detections = [
+            ("Scissors", .68, .24),
+            ("Paper", .91, .27),
+            ("Rock", .86, .78),
+            ("Rock", .42, .80),
+        ]
+        self.assertEqual(valid_pair(detections), (("Paper", .91), ("Rock", .86)))
 
     def test_live_round_scores_once_replay_and_reset(self):
         game = LocalGame()

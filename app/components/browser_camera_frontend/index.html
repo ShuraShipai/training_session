@@ -58,13 +58,15 @@
       const sourceWidth = video.videoWidth;
       const sourceHeight = video.videoHeight;
       if (!sourceWidth || !sourceHeight) return;
-      const scale = Math.min(1, 640 / sourceWidth, 360 / sourceHeight);
+      // Keep the browser frame at camera resolution: shrinking to 640x360 made
+      // the original checkpoint miss the second player's smaller hand.
+      const scale = Math.min(1, 1280 / sourceWidth, 720 / sourceHeight);
       canvas.width = Math.round(sourceWidth * scale);
       canvas.height = Math.round(sourceHeight * scale);
       const context = canvas.getContext("2d", { alpha: false });
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       send("streamlit:setComponentValue", {
-        value: canvas.toDataURL("image/jpeg", 0.68),
+        value: canvas.toDataURL("image/jpeg", 0.9),
         dataType: "string"
       });
     }
