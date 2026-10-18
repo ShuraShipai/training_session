@@ -1,31 +1,30 @@
-"""Local two-player RPS using the Mac's OpenCV camera and preserved YOLO model."""
+"""Live two-player camera game using browser capture and the existing YOLO model."""
+import base64
+import hashlib
 import time
 
 import streamlit as st
 
+from app.components.browser_camera import browser_camera
 from app.components.game import LocalGame, MIN_CONFIDENCE, valid_pair
 from app.components.services import detect_live_gestures
 
 
 st.title("Rock-Paper-Scissors")
-st.subheader("Play together in front of this laptop")
-st.write("Stand side by side: Player 1 on the left, Player 2 on the right. Show your gestures together.")
+st.caption("Play together in front of one camera. Player 1 stands left; Player 2 stands right.")
 
 if "local_rps_game" not in st.session_state:
     st.session_state.local_rps_game = LocalGame()
-if "opencv_camera" not in st.session_state:
-    st.session_state.opencv_camera = None
-if "opencv_last_inference" not in st.session_state:
-    st.session_state.opencv_last_inference = 0.0
-if "opencv_annotated_frame" not in st.session_state:
-    st.session_state.opencv_annotated_frame = None
-if "opencv_camera_error" not in st.session_state:
-    st.session_state.opencv_camera_error = None
-if "opencv_detections" not in st.session_state:
-    st.session_state.opencv_detections = ()
+if "browser_frame_digest" not in st.session_state:
+    st.session_state.browser_frame_digest = None
+if "browser_detections" not in st.session_state:
+    st.session_state.browser_detections = ()
+if "browser_frame_time" not in st.session_state:
+    st.session_state.browser_frame_time = 0.0
+if "browser_camera_error" not in st.session_state:
+    st.session_state.browser_camera_error = None
 
 game = st.session_state.local_rps_game
-
 score_columns = st.columns(3)
 score_columns[0].metric("Player 1", game.player1_score)
 score_columns[1].metric("Player 2", game.player2_score)
@@ -36,100 +35,52 @@ controls[0].button("Reset Score", on_click=game.reset)
 if game.completed:
     controls[1].button("Play Again", type="primary", on_click=game.play_again)
 
-st.caption(f"Live detection · one hand on each side · minimum confidence {MIN_CONFIDENCE:.0%}")
+st.caption(f"Live YOLO detection · one gesture per side · minimum confidence {MIN_CONFIDENCE:.0%}")
+frame_data_url = browser_camera(key="rps_browser_camera", target_fps=2.5)
 
+# The component sends compact frames over the existing Streamlit connection. This
+# avoids WebRTC ICE/TURN services while keeping camera capture in the browser.
+if isinstance(frame_data_url, str) and frame_data_url.startswith("data:image/jpeg;base64,"):
+    digest = hashlib.sha256(frame_data_url.encode("ascii")).hexdigest()
+    if digest != st.session_state.browser_frame_digest:
+        st.session_state.browser_frame_digest = digest
+        try:
+            import cv2
+            import numpy as np
 
-def stop_camera():
-    camera = st.session_state.get("opencv_camera")
-    if camera is not None:
-        camera.release()
-    st.session_state.opencv_camera = None
+            encoded = base64.b64decode(frame_data_url.partition(",")[2], validate=True)
+            frame = cv2.imdecode(np.frombuffer(encoded, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if frame is None:
+                raise ValueError("The browser camera frame could not be decoded.")
+            detections, _annotated = detect_live_gestures(frame)
+            st.session_state.browser_detections = tuple(detections)
+            st.session_state.browser_frame_time = time.monotonic()
+            st.session_state.browser_camera_error = None
+        except Exception as error:
+            st.session_state.browser_detections = ()
+            st.session_state.browser_camera_error = f"Live detection failed: {type(error).__name__}: {error}"
 
+if st.session_state.browser_camera_error:
+    st.error(st.session_state.browser_camera_error)
 
-def start_camera():
-    import cv2
-
-    stop_camera()
-    camera = cv2.VideoCapture(0)
-    if not camera.isOpened():
-        camera.release()
-        st.session_state.opencv_camera_error = (
-            "OpenCV could not open the laptop camera. Allow camera access for Terminal, "
-            "iTerm, or the app running Streamlit in macOS System Settings → "
-            "Privacy & Security → Camera, then restart this app."
-        )
-        return
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    st.session_state.opencv_camera = camera
-    st.session_state.opencv_camera_error = None
-    st.session_state.opencv_last_inference = 0.0
-    st.session_state.opencv_annotated_frame = None
-    st.session_state.opencv_detections = ()
-
-
-if st.session_state.opencv_camera is None:
-    st.button("Start live camera", type="primary", on_click=start_camera)
-    st.info("This no-relay camera mode works when you run the app on the same laptop as the camera.")
-    if st.session_state.opencv_camera_error:
-        st.error(st.session_state.opencv_camera_error)
+fresh = time.monotonic() - st.session_state.browser_frame_time < 2.5
+detections = st.session_state.browser_detections if fresh else ()
+pair = valid_pair(detections)
+if pair:
+    left, right = pair
+    left_col, right_col = st.columns(2)
+    left_col.metric("Player 1 · left", left[0], f"{left[1]:.0%} confidence")
+    right_col.metric("Player 2 · right", right[0], f"{right[1]:.0%} confidence")
+elif st.session_state.browser_frame_time and fresh:
+    st.info("Show one clear hand on each side of the center line. Both gestures must be at least 60% confident.")
 else:
-    st.button("Stop camera", on_click=stop_camera)
+    st.info("Press **Start live camera** in the camera view and allow this site to use your camera.")
 
 if game.completed:
     st.success(game.result)
     st.write(f"Player 1: **{game.player1}** · Player 2: **{game.player2}**")
 
-if st.session_state.opencv_camera is not None:
-    @st.fragment(run_every=0.15)
-    def live_camera_game():
-        camera = st.session_state.opencv_camera
-        if camera is None:
-            st.info("Camera stopped.")
-            return
-
-        ok, frame = camera.read()
-        if not ok:
-            st.session_state.opencv_camera_error = "The camera stopped returning frames. Stop and start the camera again."
-            stop_camera()
-            st.error(st.session_state.opencv_camera_error)
-            return
-
-        now = time.monotonic()
-        if now - st.session_state.opencv_last_inference >= 0.33:
-            try:
-                detections, annotated = detect_live_gestures(frame)
-                st.session_state.opencv_detections = tuple(detections)
-                st.session_state.opencv_annotated_frame = annotated
-                st.session_state.opencv_last_inference = now
-            except Exception as error:
-                st.session_state.opencv_camera_error = f"Gesture detection failed: {type(error).__name__}: {error}"
-
-        if st.session_state.opencv_annotated_frame is not None:
-            st.image(
-                st.session_state.opencv_annotated_frame,
-                channels="BGR",
-                use_container_width=True,
-            )
-        if st.session_state.opencv_camera_error:
-            st.error(st.session_state.opencv_camera_error)
-
-        detections = st.session_state.opencv_detections
-        pair = valid_pair(detections)
-        if pair:
-            left, right = pair
-            first, second = st.columns(2)
-            first.metric("Player 1 · left", left[0], f"{left[1]:.0%} confidence")
-            second.metric("Player 2 · right", right[0], f"{right[1]:.0%} confidence")
-        else:
-            st.info("Show exactly two clear gestures at the same time, one on each side of the divider.")
-
-        if game.completed:
-            st.caption("Round complete. Choose Play Again above when both players are ready.")
-        elif st.button("Play Round", type="primary", disabled=pair is None):
-            if game.confirm(detections, game.round_id):
-                st.rerun()
-            else:
-                st.warning("The latest camera frame does not contain two fresh, confident gestures. No points awarded.")
-
-    live_camera_game()
+if st.button("Play Round", type="primary", disabled=pair is None or game.completed):
+    if game.confirm(detections, game.round_id):
+        st.rerun()
+    st.warning("The latest camera frame is no longer valid. No points awarded.")

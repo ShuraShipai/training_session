@@ -54,13 +54,13 @@ class AppTests(unittest.TestCase):
         app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
         app.session_state["local_rps_game"] = LocalGame()
         app.run()
-        self.assertTrue(any(b.label == "Start live camera" for b in app.button))
+        self.assertTrue(any(b.label == "Play Round" for b in app.button))
         self.assertTrue(any(m.label == "Player 1" for m in app.metric))
         self.assertFalse(app.exception)
 
     def test_live_rps_page_and_unready_round(self):
         app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
-        self.assertTrue(any(b.label == "Start live camera" for b in app.button))
+        self.assertTrue(any(b.label == "Play Round" for b in app.button))
         self.assertEqual(app.session_state["local_rps_game"].player1_score, 0)
         self.assertFalse(app.exception)
 

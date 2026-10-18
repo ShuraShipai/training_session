@@ -1,29 +1,19 @@
 # AI Training Lab
 
-## Live Application — Try It Online
+## Live Applications — Try Them Online
 
-The dashboard is live. Run the app locally to use the two-player OpenCV camera game; the hosted app cannot access a visitor's local camera.
+Open the hosted app and choose a project from its navigation.
 
-| Application | Live Demo | Source Code |
+| Project | Live Demo | Source Code |
 |---|---|---|
-| AI Training Lab — Background Removal, Text-to-Speech, Speech-to-Text, and Rock-Paper-Scissors | [Open the dashboard](https://trainingsession.streamlit.app/) | [Dashboard and pages](app/) |
+| Background Removal | [Try it](https://trainingsession.streamlit.app/) | [App page](app/pages/background_removal.py) |
+| Text-to-Speech | [Try it](https://trainingsession.streamlit.app/) | [App page](app/pages/text_to_speech.py) |
+| Speech-to-Text | [Try it](https://trainingsession.streamlit.app/) | [App page](app/pages/speech_to_text.py) |
+| Rock-Paper-Scissors | [Try it](https://trainingsession.streamlit.app/rock-paper-scissors) | [App page](app/pages/rock_paper_scissors.py) |
 
-AI Training Lab brings the four training projects together in one Streamlit website. Each feature keeps its existing processing engine and has its own page. The original source scripts and custom YOLO `best.pt` model are preserved.
-
-## Features
-
-- **Background Removal:** upload an image, remove its background with the existing rembg implementation, preview the transparent result, and download a PNG.
-- **Text-to-Speech:** generate, play, and download gTTS audio in English, Hindi, Kannada, or Tamil.
-- **Speech-to-Text:** record in the browser or upload WAV, then transcribe using the existing SpeechRecognition Google engine and language options.
-- **Rock-Paper-Scissors:** live OpenCV camera, existing YOLO `best.pt`, two players in front of one laptop, detected moves, winner, scores, replay, and reset. Both confident gestures must be present; press **Play Round** once to score. Video frames never score by themselves. Camera play requires running the app locally.
-
-## Add another page
-
-Create a Streamlit page as a `.py` file under `app/pages/`. The dashboard discovers page files automatically and adds them to Home and the navigation. Add any new package to the root `requirements.txt`. For a custom title or Home description, add its metadata to `PAGE_DETAILS` in `app/main.py`.
+The four projects have separate pages and keep their existing processing engines. The Rock-Paper-Scissors page uses the original `best.pt` YOLO model for two players in front of one browser camera. Allow camera access, stand on opposite sides of the center line, and press **Play Round** to score once.
 
 ## Run locally
-
-Use Python 3.12 and install the root requirements for a fresh setup:
 
 ```bash
 python3.12 -m venv .venv-lab
@@ -32,22 +22,6 @@ python -m pip install -r requirements.txt
 streamlit run app/main.py
 ```
 
-On this Mac, the existing `.venv` already has Streamlit and the system Python has OpenCV, PyTorch, and Ultralytics. To run the local-camera game without reinstalling those packages, use:
+Camera frames are sent to the Streamlit app for YOLO inference through the app's existing connection. The camera implementation does not use a separate TURN relay or paid camera service. TTS and STT use Google's services; background removal may download rembg model weights on first use. YOLO/PyTorch dependencies are large, and Community Cloud has limited CPU and memory.
 
-```bash
-./deployment/start_local_lab.sh
-```
-
-Then open `http://localhost:8501`. Allow camera access to Terminal (or the terminal app you used) in **System Settings → Privacy & Security → Camera**.
-
-Background removal downloads rembg's default model weights on first use. YOLO/PyTorch dependencies are large; the app loads the original `best.pt` and does not retrain or substitute another model. Speech generation and transcription need outbound access to Google's services.
-
-## Deployment status
-
-The intended public target is one Streamlit Community Cloud app from `app/main.py`, using the root `requirements.txt`. Its Home page links to all four projects; adding a page under `app/pages/` extends the same app. Community Cloud can sleep after inactivity and has limited CPU and memory, so verify model startup and inference before publishing the URL.
-
-The existing repository is [ShuraShipai/training_session](https://github.com/ShuraShipai/training_session). The dashboard is hosted at [trainingsession.streamlit.app](https://trainingsession.streamlit.app/). The live OpenCV game runs locally because the hosted server cannot directly open your laptop camera. See [deployment notes](deployment/README.md) and the [test report](deployment/TEST_REPORT.md).
-
-ngrok remains available for local demonstrations: `./deployment/start_four_apps.sh` exposes the independent project apps, not the unified dashboard. For the dashboard, start `streamlit run app/main.py` and expose its port with ngrok separately. The Free ngrok plan allows up to three simultaneous endpoints.
-
-For camera play, run Streamlit on the same laptop as the webcam. On Mac, allow camera access for the terminal app running Streamlit in **System Settings → Privacy & Security → Camera**.
+To add a project page, add a Python file under `app/pages/` and its required packages to `requirements.txt`. The home page and navigation discover pages automatically. See [deployment notes](deployment/README.md) and [test status](deployment/TEST_REPORT.md).

@@ -14,7 +14,7 @@ The Home page and sidebar provide all four project pages. New `.py` files added 
 
 Community Cloud supports multiple app pages and gives the app approximately up to 2 CPU cores and 2.7 GB RAM. It sleeps after 12 hours without traffic. The existing YOLO checkpoint is 6.2 MB; local CPU inference on the provided image peaked around 375 MiB process RSS. This suggests single-model inference is within the memory ceiling, but the complete app needs an actual Cloud build and real processing checks. rembg downloads its default U²-Net weights on first use, and YOLO/PyTorch adds a substantial install. The two models are loaded lazily, so users incur their memory only when using the relevant project. These estimates do not replace Cloud measurements.
 
-Text-to-Speech and Speech-to-Text send requests to Google's services and require outbound network access. The RPS game now reads the camera directly with OpenCV. This works when Streamlit runs on the same laptop as the camera; Streamlit Community Cloud runs on a remote server and cannot access the visitor's laptop camera through OpenCV. Run the unified app locally for live camera play. On macOS, grant camera permission to Terminal, iTerm, or the IDE running Streamlit under **System Settings → Privacy & Security → Camera**. Inference is throttled to about three frames per second on the CPU. Free Cloud apps may hibernate; a fixed URL is not an uptime guarantee.
+Text-to-Speech and Speech-to-Text send requests to Google's services and require outbound network access. The RPS game captures video in the browser with `getUserMedia` and sends small JPEG frames through the existing Streamlit component connection to the app server for inference. It does not use WebRTC, a TURN server, Cloudflare, or another camera relay. The browser must be allowed to use the camera, and inference runs on the Cloud CPU at a few frames per second. Free Cloud apps may hibernate; a fixed URL is not an uptime guarantee.
 
 To publish later fixes to the already deployed dashboard branch, run this from the project directory on the Mac terminal that has GitHub CLI authorization:
 
@@ -43,4 +43,4 @@ ngrok Free permits up to three online endpoints. Its public URLs only work while
 
 ## Publication status
 
-The user verified the app at [trainingsession.streamlit.app](https://trainingsession.streamlit.app/) and successfully published branch `codex/ai-training-lab-20261018-101637`. The deployed version currently shows the still-photo RPS interface. The live two-player WebRTC update is local and must be pushed to that same branch using the command above; Cloud will rebuild it afterward.
+The user verified the app at [trainingsession.streamlit.app](https://trainingsession.streamlit.app/) and published branch `codex/ai-training-lab-20261018-101637`. The browser-camera component update is being prepared; it is not live until the updated branch is pushed and Cloud rebuilds it.
