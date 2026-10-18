@@ -1,0 +1,77 @@
+[
+  {
+    "original": "new.py",
+    "preserved_copy": "projects/background-removal/new.py",
+    "sha256": "9ee42c0e48c5c26e0505d7b01149cdd33500764c260dfea606a821a7e74cd005"
+  },
+  {
+    "original": "tts_maker.py",
+    "preserved_copy": "projects/text-to-speech/tts_maker.py",
+    "sha256": "bfcd28aeaaf565f2e5bd12782e5bc82748ca68aa31d77a7f939aa97faefeb1f8"
+  },
+  {
+    "original": "stt_maker.py",
+    "preserved_copy": "projects/speech-to-text/stt_maker.py",
+    "sha256": "7e9ba421a3dd12bba5ff73cd399453b3892cffcc7d3773178f2d6bf3388d3373"
+  },
+  {
+    "original": "rock_paper_scissor.py",
+    "preserved_copy": "projects/rock-paper-scissors/rock_paper_scissor.py",
+    "sha256": "a851b1ac33569ab3f6c37eb71cde18fe4944c4b6a517da87f3ea8d13d29498ad"
+  },
+  {
+    "original": "best.pt",
+    "preserved_copy": "projects/rock-paper-scissors/best.pt",
+    "sha256": "19e751506467c8179b39d48a0fec4a1cd1b5e017afaf2fad85dd865b009fc691"
+  },
+  {
+    "original": "Image.jpeg",
+    "preserved_copy": "assets/Image.jpeg",
+    "sha256": "52735bdd333aee9a08b8aca5e0d31bbbb001c91973862cb4ddd9b2bfae171331"
+  },
+  {
+    "original": "yolov8n.pt",
+    "preserved_copy": "experiments/yolov8n.pt",
+    "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36"
+  },
+  {
+    "original": "model_chat.py",
+    "preserved_copy": "experiments/model_chat.py",
+    "sha256": "4dd4ac4ebb79f75e14647ac3cf0fe1e1e2ce9f9574229a578ce88e43b206311c"
+  },
+  {
+    "original": "memory.py",
+    "preserved_copy": "experiments/memory.py",
+    "sha256": "e8e44b32fde859ab268825b4a40296d5847c08e063e7de73d82b5f0da9066399"
+  },
+  {
+    "original": "labeler.html",
+    "preserved_copy": "experiments/labeler.html",
+    "sha256": "83947b982c1bd35ed91d28b89b832339b869a46d8ebb990d48e690176a94c07a"
+  },
+  {
+    "original": "paper_scissor_stone.ipynb",
+    "preserved_copy": "notebooks/original-colab-notebooks/paper_scissor_stone.ipynb",
+    "sha256": "a19d1cd665f052b463b532d36de17b7c534c64da0f92f91ddf81279734583aab"
+  },
+  {
+    "original": "Untitled1.ipynb",
+    "preserved_copy": "notebooks/original-colab-notebooks/Untitled1.ipynb",
+    "sha256": "9671845851d5b0e6d0c72c8fb4ff359b05ed321b2b360a428a50bc2af0629e54"
+  },
+  {
+    "original": "text_to_speech.ipynb",
+    "preserved_copy": "notebooks/original-colab-notebooks/text_to_speech.ipynb",
+    "sha256": "1831e0a024705001559f8374c5807fef24f0ad8bd94a7707f14113ae0e6c954e"
+  },
+  {
+    "original": "groq.ipynb",
+    "preserved_copy": "experiments/notebooks/groq.ipynb",
+    "sha256": "adf6a19bbbc2e84faa92dc7be4df09e77930475dc4ee95013a16bc6816e60f36"
+  },
+  {
+    "original": "webscrapping.ipynb",
+    "preserved_copy": "experiments/notebooks/webscrapping.ipynb",
+    "sha256": "94420d5c42187624ea8113f36b82a15fd5a7b02ad091b1389e927012f731ce0a"
+  }
+]

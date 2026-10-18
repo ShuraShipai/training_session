@@ -1,0 +1,3 @@
+# AI Training Lab design
+
+Use Streamlit's accessible native widgets and navigation. Extend the existing audio applications without decorative custom components. A quiet off-white surface, forest-green primary actions, dark text and pale secondary surfaces keep uploads and results legible. Four requested cards use a two-column grid which Streamlit stacks on narrow screens. Each tool starts with its purpose, then input, one primary action, and downloadable output. Clear error/empty states and explicit gesture confirmation take priority over decoration. No external fonts, animations, or invented imagery.

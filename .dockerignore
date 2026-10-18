@@ -1,0 +1,11 @@
+**
+!Dockerfile
+!requirements.txt
+!app/
+!app/**
+!projects/
+!projects/rock-paper-scissors/
+!projects/rock-paper-scissors/best.pt
+!.streamlit/
+!.streamlit/config.toml
+**/__pycache__/

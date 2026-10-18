@@ -1,0 +1,2 @@
+# Tests use unittest and Streamlit's included AppTest; no additional packages.
+-r requirements.txt

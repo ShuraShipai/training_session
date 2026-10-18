@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Satellite detection labeller</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #20312d; background: #f5f6f2; accent-color: #246448; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1120px; margin: auto; padding: 28px 24px; }
+h1 { margin: 0 0 6px; font-size: clamp(1.5rem, 4vw, 2rem); letter-spacing: -.025em; }
+p { line-height: 1.5; }
+.intro, .hint { color: #52605a; margin: 0; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 24px 0 12px; }
+.file-control { display: grid; gap: 8px; font-weight: 600; min-width: 0; }
+input { max-width: 100%; font: inherit; }
+input::file-selector-button, button { font: inherit; border: 1px solid #a9b6af; border-radius: 6px; background: white; color: #20312d; padding: 11px 16px; cursor: pointer; min-height: 44px; }
+input::file-selector-button { margin-right: 10px; }
+button:hover:not(:disabled), input::file-selector-button:hover { background: #e8eee8; border-color: #246448; }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #227453; outline-offset: 3px; }
+.download { background: #246448; color: white; border-color: #246448; font-weight: 600; }
+.download:hover:not(:disabled) { background: #174d35; color: white; }
+#save-status { font-size: .85rem; color: #52605a; margin: 8px 0 20px; }
+#notice, #map-warning { padding: 12px; background: #fff1d4; color: #674300; border-radius: 6px; line-height: 1.5; }
+[hidden] { display: none !important; }
+#empty { padding: 64px 24px; border: 1px dashed #a9b6af; text-align: center; background: white; }
+#empty h2 { font-size: 1.25rem; }
+.record { border: 1px solid #bac5bd; background: white; border-radius: 8px; overflow: hidden; }
+.record.labelled { border-color: #246448; }
+.record-header { padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.record.labelled .record-header { background: #e8f1e9; }
+#counter { font-weight: 700; font-variant-numeric: tabular-nums; }
+#label-status { margin-left: auto; font-size: .9rem; }
+progress { display: block; width: 100%; height: 5px; border: 0; border-radius: 0; }
+progress::-webkit-progress-bar { background: #e4e9e4; }
+progress::-webkit-progress-value { background: #246448; }
+progress::-moz-progress-bar { background: #246448; }
+.metadata { display: flex; gap: 16px 32px; padding: 16px 20px; flex-wrap: wrap; align-items: center; }
+dl { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0; }
+dt { font-size: .75rem; color: #52605a; margin-bottom: 3px; }
+dd { margin: 0; font-size: .95rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+a { color: #195d42; text-underline-offset: 3px; }
+#map-link { margin-left: auto; font-size: .9rem; }
+#map { height: clamp(280px, 49vh, 540px); background: #e4e9e4; }
+#map-warning { margin: 12px 20px; }
+.leaflet-control-zoom a { width: 40px !important; height: 40px !important; line-height: 40px !important; }
+.actions { margin-top: 22px; }
+.actions h2 { margin: 0 0 12px; font-size: 1rem; font-weight: 600; }
+.labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.labels button { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; font-weight: 600; }
+.labels button[aria-pressed="true"] { background: #246448; border-color: #246448; color: white; }
+kbd { font: inherit; font-size: .8rem; opacity: .75; }
+.navigation { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+.navigation p { margin: 0; font-size: .85rem; text-align: center; }
+::selection { background: #c8e3cd; color: #20312d; }
+@media (max-width: 600px) { main { padding: 20px 14px; } .labels { grid-template-columns: repeat(2, 1fr); gap: 8px; } .labels button { padding: 12px; font-size: .9rem; } .record-header, .metadata { padding: 12px; } #label-status { margin-left: 0; } #map-link { margin-left: 0; } .navigation { flex-wrap: wrap; } .navigation p { order: 3; width: 100%; } .download { width: 100%; } }
+</style>
+</head>
+<body>
+<main>
+<header><h1>Satellite detection labeller</h1><p class="intro">Inspect the location. Choose a label. Move to the next detection.</p></header>
+<div class="toolbar">
+<label class="file-control">Load label_sample.csv<input id="file" type="file" accept=".csv,text/csv"></label>
+<button id="download" class="download" disabled>Download labelled CSV</button>
+</div>
+<p id="save-status" role="status">Your CSV stays in this browser. Internet is needed for the map.</p>
+<p id="notice" role="alert" hidden></p>
+<section id="empty"><h2>Load your CSV to begin</h2><p class="hint">One detection at a time. Labels are set only by you.</p></section>
+<section id="workspace" hidden aria-label="Detection labelling">
+<div id="record" class="record">
+<div class="record-header" aria-live="polite"><span id="counter"></span><span id="completed"></span><span id="label-status"></span></div>
+<progress id="progress" aria-label="Labelled detections" value="0" max="1"></progress>
+<div class="metadata"><dl><div><dt>Latitude</dt><dd id="latitude"></dd></div><div><dt>Longitude</dt><dd id="longitude"></dd></div><div><dt>Acquisition date</dt><dd id="date"></dd></div></dl><a id="map-link" target="_blank" rel="noopener noreferrer">Open in Google Maps</a></div>
+<div id="map" aria-label="Satellite map of the current detection"></div>
+<p id="map-warning" role="status" hidden></p>
+</div>
+<div class="actions"><h2>Choose your label <span class="hint">· keys 1–4 · advances automatically</span></h2>
+<div class="labels">
+<button data-label="agriculture_burn" aria-keyshortcuts="1" aria-pressed="false"><span>agriculture_burn</span><kbd>1</kbd></button>
+<button data-label="fire" aria-keyshortcuts="2" aria-pressed="false"><span>fire</span><kbd>2</kbd></button>
+<button data-label="industrial" aria-keyshortcuts="3" aria-pressed="false"><span>industrial</span><kbd>3</kbd></button>
+<button data-label="unclear" aria-keyshortcuts="4" aria-pressed="false"><span>unclear</span><kbd>4</kbd></button>
+</div></div>
+<nav class="navigation" aria-label="Rows"><button id="prev">Prev</button><p class="hint" id="navigation-hint">You can revisit any row to change your label.</p><button id="next">Next</button></nav>
+</section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const REQUIRED = ['latitude','longitude','acq_date','frp','confidence','priority_level','source_type','map_link','your_label'];
+const LABELS = ['agriculture_burn','fire','industrial','unclear'];
+const STORAGE = 'satellite-labeler-v1';
+let state = null, map = null, marker = null, loading = false;
+function notice(message = '') { $('notice').textContent = message; $('notice').hidden = !message; }
+function mapWarning(message = '') { $('map-warning').textContent = message; $('map-warning').hidden = !message; }
+function validate(headers, rows) {
+  if (!Array.isArray(headers) || !headers.every(h => typeof h === 'string') || new Set(headers).size !== headers.length || REQUIRED.some(h => !headers.includes(h))) {
+    throw new Error('CSV must have unique column names and all nine required columns. Check the header and try again.');
+  }
+  if (!Array.isArray(rows) || !rows.length) throw new Error('The CSV contains no detections. Choose a file with data rows.');
+  if (rows.some(row => !Array.isArray(row) || row.length !== headers.length || row.some(v => typeof v !== 'string'))) {
+    throw new Error('A CSV row has missing or extra cells. Check the file and try again.');
+  }
+}
+function cell(name) { return state.rows[state.index][state.headers.indexOf(name)]; }
+function save() {
+  try { localStorage.setItem(STORAGE, JSON.stringify(state)); $('save-status').textContent = 'Progress saved in this browser. Download a CSV for a separate copy.'; }
+  catch { $('save-status').textContent = 'Progress could not be saved in this browser. Download your CSV before closing or refreshing.'; }
+}
+function initMap() {
+  if (map || !window.L) return;
+  map = L.map('map', {minZoom: 2, maxZoom: 19, zoomControl: true});
+  const tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+  }).addTo(map);
+  tiles.on('tileerror', () => mapWarning('Some satellite tiles could not load. Check your connection, zoom out, or use the map link.'));
+  L.control.scale({imperial: false}).addTo(map);
+}
+function render() {
+  $('empty').hidden = !!state;
+  $('workspace').hidden = !state;
+  $('download').disabled = !state || !window.Papa || loading;
+  if (!state) return;
+  const label = cell('your_label');
+  const labelled = label.trim() !== '';
+  const count = state.rows.filter(row => row[state.headers.indexOf('your_label')].trim() !== '').length;
+  $('counter').textContent = `${state.index + 1}/${state.rows.length}`;
+  $('completed').textContent = `${count} labelled of ${state.rows.length}`;
+  // Never render hidden CSV attributes, filenames, or raw CSV error messages.
+  $('label-status').textContent = labelled ? 'Already labelled' : 'Not yet labelled';
+  $('record').classList.toggle('labelled', labelled);
+  $('progress').max = state.rows.length; $('progress').value = count;
+  $('latitude').textContent = cell('latitude'); $('longitude').textContent = cell('longitude'); $('date').textContent = cell('acq_date');
+  let link = null;
+  try { const url = new URL(cell('map_link')); if (['https:', 'http:'].includes(url.protocol)) link = url.href; } catch {}
+  $('map-link').hidden = !link;
+  if (link) $('map-link').href = link; else $('map-link').removeAttribute('href');
+  document.querySelectorAll('[data-label]').forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.label === label)); button.disabled = loading; });
+  $('prev').disabled = state.index === 0 || loading;
+  $('next').disabled = state.index === state.rows.length - 1 || loading;
+  $('navigation-hint').textContent = count === state.rows.length ? 'All rows labelled. Download your CSV, or revisit a row to edit.' : 'You can revisit any row to change your label.';
+  const lat = Number(cell('latitude')), lon = Number(cell('longitude'));
+  const valid = cell('latitude').trim() && cell('longitude').trim() && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+  mapWarning();
+  $('map').hidden = !valid;
+  if (!valid) { mapWarning('This row has invalid coordinates. Use its map link if available, or move to another row.'); return; }
+  if (!window.L) { mapWarning('The map library could not load. Connect to the internet and refresh, or use the map link.'); return; }
+  initMap();
+  map.invalidateSize(); map.setView([lat, lon], 16, {animate: false});
+  if (marker) marker.setLatLng([lat, lon]);
+  else marker = L.marker([lat, lon], {alt: 'Detection location'}).addTo(map);
+}
+function setLabel(label) {
+  if (!state || loading || !LABELS.includes(label)) return;
+  state.rows[state.index][state.headers.indexOf('your_label')] = label;
+  if (state.index < state.rows.length - 1) state.index++;
+  save(); render();
+}
+function move(delta) {
+  if (!state || loading) return;
+  state.index = Math.max(0, Math.min(state.rows.length - 1, state.index + delta)); save(); render();
+}
+$('file').addEventListener('change', event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!window.Papa) { notice('The CSV library could not load. Connect to the internet and refresh.'); return; }
+  loading = true; $('file').disabled = true; notice(); render();
+  Papa.parse(file, {
+    header: false, dynamicTyping: false, delimiter: ',', skipEmptyLines: true,
+    complete(result) {
+      try {
+        if (result.errors.length) throw new Error('The CSV contains malformed quoting. Check the file and try again.');
+        const [headers, ...rows] = result.data;
+        validate(headers, rows);
+        const original = JSON.stringify(result.data);
+        // Reloading the same source must not overwrite the user's saved work.
+        if (!state || state.original !== original) state = {version: 1, headers, rows, index: 0, original};
+        save();
+      } catch (error) { notice(error.message); }
+      finally { loading = false; $('file').disabled = false; $('file').value = ''; render(); }
+    },
+    error() { loading = false; $('file').disabled = false; $('file').value = ''; notice('The file could not be read. Please choose it again.'); render(); }
+  });
+});
+document.querySelectorAll('[data-label]').forEach(button => button.addEventListener('click', () => setLabel(button.dataset.label)));
+$('prev').addEventListener('click', () => move(-1)); $('next').addEventListener('click', () => move(1));
+document.addEventListener('keydown', event => {
+  if (!state || loading || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  if (event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+  const index = ['1','2','3','4'].indexOf(event.key);
+  if (index >= 0) { event.preventDefault(); setLabel(LABELS[index]); }
+});
+$('download').addEventListener('click', () => {
+  if (!state || !window.Papa) return;
+  const csv = Papa.unparse([state.headers, ...state.rows], {delimiter: ',', newline: '\r\n', quotes: true});
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], {type: 'text/csv;charset=utf-8;'}));
+  const a = document.createElement('a'); a.href = url; a.download = 'label_sample_labelled.csv'; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+try {
+  const saved = localStorage.getItem(STORAGE);
+  if (saved) {
+    const candidate = JSON.parse(saved); validate(candidate.headers, candidate.rows);
+    if (candidate.version !== 1 || !Number.isInteger(candidate.index) || candidate.index < 0 || candidate.index >= candidate.rows.length || typeof candidate.original !== 'string') throw new Error('Invalid saved progress');
+    state = candidate; $('save-status').textContent = 'Restored your last CSV, labels, and position from this browser.';
+  }
+} catch { notice('Saved progress could not be restored. Load your latest CSV; download regularly if browser storage is unavailable.'); }
+if (!window.Papa) notice('The CSV library could not load. Connect to the internet and refresh.');
+render();
+</script>
+</body>
+</html>
