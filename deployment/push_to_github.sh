@@ -107,7 +107,7 @@ if git diff --cached --quiet; then
 fi
 echo "Reviewing the exact branch changes:"
 git diff --cached --stat
-git commit -m "Organize and unify AI training projects"
+git commit -m "Publish extensible AI Training Lab dashboard"
 git push -u origin "$BRANCH"
 echo "Published branch: https://github.com/${REPOSITORY}/tree/${BRANCH}"
 echo "The existing default branch was not changed."

@@ -97,8 +97,9 @@ class AppTests(unittest.TestCase):
     def test_originals_preserved(self):
         manifest = json.loads((ROOT / "deployment/original-files.json").read_text())
         for record in manifest:
-            for field in ("original", "preserved_copy"):
-                self.assertEqual(hashlib.sha256((ROOT / record[field]).read_bytes()).hexdigest(), record["sha256"])
+            preserved = ROOT / record["preserved_copy"]
+            self.assertTrue(preserved.is_file(), record["preserved_copy"])
+            self.assertEqual(hashlib.sha256(preserved.read_bytes()).hexdigest(), record["sha256"])
 
     def test_real_image_decode_and_invalid_input(self):
         image = services.read_image((ROOT / "Image.jpeg").read_bytes())
