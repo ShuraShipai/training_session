@@ -1,98 +1,45 @@
----
-title: AI Training Lab
-sdk: docker
-app_port: 7860
----
+# AI Training Projects
 
-# AI Training Lab
+## Live Applications — Try Them Online
 
-Four AI training projects in one Streamlit application: remove an image background, generate speech, transcribe audio, and play rock-paper-scissors against the computer.
+No Streamlit Community Cloud demo has been deployed and verified yet. Live links will appear here after GitHub and Streamlit authorization, deployment, and browser testing are complete.
 
-**Status:** implemented locally with offline tests passing. Five downloaded notebooks have been inspected and organized; one original contains a credential and is excluded from Git, with a sanitized copy prepared. GitHub synchronization, deployment, real ML inference, and successful external speech processing are not yet verified. See [the test report](deployment/TEST_REPORT.md). No public application URL has been issued.
+| Project | Live Demo | Source Code |
+|---|---|---|
+| Background Removal | Pending verification | [Project folder](projects/background-removal/) |
+| Text-to-Speech | Pending verification | [Project folder](projects/text-to-speech/) |
+| Speech-to-Text | Pending verification | [Project folder](projects/speech-to-text/) |
+| Rock-Paper-Scissors | Pending verification | [Project folder](projects/rock-paper-scissors/) |
 
-The intended existing repository is [ShuraShipai/training_session](https://github.com/ShuraShipai/training_session). Remote contents and history could not be read from the development sandbox; this link is the user-provided destination, not confirmation of a successful push.
+The projects are four independent Streamlit applications. Each has its own entry point, dependencies, and README. Original scripts and the custom `best.pt` model are preserved.
 
 ## Projects
 
-| Project | Features | Existing engine preserved |
-| --- | --- | --- |
-| Background Removal | Image upload, original/result previews, transparent PNG download | `rembg.remove`, default U²-Net |
-| Text-to-Speech | Four languages, slow speech, playback, MP3 download | gTTS |
-| Speech-to-Text | Browser recording, WAV upload, ten languages, copy/download transcript | SpeechRecognition `recognize_google` |
-| Rock-Paper-Scissors | Camera snapshot or upload, confidence, explicit confirmation, winner, scores, replay/reset | Ultralytics YOLO and original `best.pt` |
+- **Background Removal** — upload an image, remove the background with the existing rembg implementation, preview the transparent result, and download PNG.
+- **Text-to-Speech** — generate, play, and download gTTS audio in English, Hindi, Kannada, or Tamil.
+- **Speech-to-Text** — record in the browser or upload WAV, then transcribe using the existing SpeechRecognition Google engine and language options.
+- **Rock-Paper-Scissors** — browser camera or image input, existing YOLO `best.pt`, computer move, winner, score, replay, and reset. One valid detection must be explicitly confirmed to score a round.
 
-TTS languages: English, Hindi, Kannada, Tamil. STT languages: English, Hindi, Kannada, Urdu, Tamil, Malayalam, Telugu, Arabic, French, Spanish. Original language codes are unchanged.
+## Run locally
 
-The computer commits a random move before the player's detection. Only one recognized gesture at 60% confidence or above can be confirmed. Multiple detections, unknown labels, invalid confidence values and stale confirmations cannot score. Completed rounds stay locked until Play Again. Reset Score clears the counters and starts a fresh round. Scores belong to the browser session and do not persist across server restarts or disconnected sessions.
-
-## Repository layout
-
-```text
-app/main.py                         Unified entry point and four home cards
-app/pages/                          Four navigable project pages
-app/components/                     Engine adapters and tested round state
-projects/                           Byte-identical copies of original scripts
-projects/rock-paper-scissors/best.pt  Original custom model, used by the app
-assets/Image.jpeg                   Preserved sample image
-experiments/                        Preserved unrelated experiments and general YOLO model
-notebooks/original-colab-notebooks/  Original relevant Colab notebooks
-notebooks/publishable/               Sanitized public copy of credential-bearing notebook
-experiments/notebooks/               Preserved unrelated downloaded notebooks
-deployment/                         Audit, hash manifest, deployment guide, test report
-tests/                              Game, UI, input validation and preservation tests
-Dockerfile                          Python 3.12 CPU deployment
-```
-
-Original Python files and model assets remain untouched at the root; organized copies are also retained. Downloaded original notebooks are byte-for-byte preserved in the notebook/experiment archive, with hashes in `deployment/original-files.json`. The Roboflow training notebook's original file is explicitly gitignored because it contains a hard-coded credential. Its sanitized publishing copy uses an environment variable instead. Revoke and replace that credential before using it again. The custom model is approximately 6.5 MB and is included directly; `yolov8n.pt` is never substituted if `best.pt` fails. No training takes place. Notebook and model metadata retain their upstream provenance; no new blanket license is asserted for the original material.
-
-## Local setup
-
-Use Python 3.12 for the full application. The existing Python 3.9 environment is retained for offline UI tests, but is not the target for the complete ML dependency set.
+Install each project's requirements in its own virtual environment. Background Removal requires Python 3.11+ for current rembg; the other three support Python 3.9+.
 
 ```bash
-python3.12 -m venv .venv-lab
-source .venv-lab/bin/activate
+cd projects/text-to-speech
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
-streamlit run app/main.py
+streamlit run tts_maker.py
 ```
 
-On Apple Silicon, pip should select native macOS wheels. Install the native `flac` executable if it is not already on PATH; the audited Mac already has it. Docker provides FLAC and OpenCV's system dependencies. PyTorch and rembg's default U²-Net weights are substantial downloads. The existing custom YOLO model is reused without downloading or training a replacement.
+Use the entry point and `requirements.txt` in each project's folder for the other apps. Background Removal downloads rembg's default model weights the first time it runs. Rock-Paper-Scissors loads the existing `best.pt`; it does not retrain or substitute another model. Speech generation and transcription require access to Google's services.
 
-Dependency pins are proposed deployment inputs, not a verified lockfile: package resolution was blocked in the sandbox. Validate them on the target host before release. `requirements-dev.txt` adds no development packages because tests use standard-library unittest and Streamlit's included AppTest.
+## Deployment status
 
-## Navigation
+The intended public target is Streamlit Community Cloud, with four separate app entries from this repository. Community Cloud supports multiple apps from one repository and resolves each app's dependencies from its entry point directory. Free apps may sleep after inactivity and have limited CPU and memory; the YOLO app must be verified against those limits before its demo link is published.
 
-Run one process, `streamlit run app/main.py`. Home cards and the sidebar use the same registered pages. Once running locally on the default port, the routes are:
+GitHub currently has the previously prepared branch `codex/ai-training-lab-20261018-093909`. The local workspace is not a Git checkout, and the saved GitHub CLI token is invalid, so current local changes have not been pushed. No public app URL is claimed. Deployment instructions and current checks are in [deployment/README.md](deployment/README.md) and [deployment/TEST_REPORT.md](deployment/TEST_REPORT.md).
 
-| Page | Local address (requires running server) | Deployment path |
-| --- | --- | --- |
-| Home | `http://localhost:8501/` | `/` |
-| Background Removal | `http://localhost:8501/background-removal` | `/background-removal` |
-| Text-to-Speech | `http://localhost:8501/text-to-speech` | `/text-to-speech` |
-| Speech-to-Text | `http://localhost:8501/speech-to-text` | `/speech-to-text` |
-| Rock-Paper-Scissors | `http://localhost:8501/rock-paper-scissors` | `/rock-paper-scissors` |
+ngrok remains available for local demonstrations. Run `./deployment/start_four_apps.sh` after installing each app's dependencies and authenticating ngrok. Its Free plan allows at most three simultaneous endpoints, so it cannot expose all four apps at once without a higher endpoint allowance.
 
-These are configured routes, not claims that a local or public server is running. Public links will be added only after deployment and verification. No screenshots are included because a browser preview could not run in this sandbox.
-
-## Tests
-
-```bash
-python -m unittest discover -s tests -v
-python deployment/smoke_processing.py
-# With all ML dependencies installed; may download the default rembg weights:
-python deployment/smoke_processing.py --ml
-```
-
-The smoke script makes real gTTS and Google recognition calls. Its transcription fixture uses macOS's installed `say` command; on Linux, use a known spoken PCM WAV with `app.components.services.transcribe` instead. YOLO smoke inference on the sample image validates execution only; gesture accuracy needs representative labeled hand photos. Mocked UI tests are reported separately from actual service tests.
-
-## Deployment and limitations
-
-See [deployment instructions and platform comparison](deployment/README.md). The Docker image serves Streamlit on port 7860 as a non-root user and preloads the unchanged default rembg weights during build. Models are lazy-loaded in the application and cached per process; CPU inference is serialized to control concurrency. Results remain per-session, without a global user-output cache.
-
-- Images are limited to 10 MB and 12 megapixels; WAV input to 10 MB and two minutes; speech input to 5,000 characters. These are new web resource limits, not changes to the original algorithms.
-- TTS text and STT audio go to Google's services. Service availability/rate limits can interrupt processing. No API key is required by the existing implementations.
-- Browser microphone/camera capture requires permissions and a secure context (HTTPS or localhost). When embedding a hosted app, open its direct app origin if browser permissions are blocked by the iframe.
-- No live video loop is used: each camera snapshot is deliberately detected and confirmed.
-- Free/shared hosting can sleep or exhaust resources. A stable address is not an uptime guarantee.
-- No speech-to-text Colab notebook was among the five downloads. Other Colab/Drive notebooks have not been searched because account access is unavailable.
-- The background-removal source's exact historical rembg version is unknown. Its default algorithm is retained; bit-for-bit equivalence to an unavailable historical environment cannot be asserted.
+For browser camera access, allow the browser to use the camera on the HTTPS app page. For local OpenCV camera access, grant the terminal or IDE permission under macOS **System Settings → Privacy & Security → Camera**.
