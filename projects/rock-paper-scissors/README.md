@@ -1,6 +1,6 @@
 # Rock-Paper-Scissors
 
-Independent Streamlit game using the existing `best.pt` model. The original desktop OpenCV implementation remains in `rock_paper_scissor.py`.
+Streamlit game using the existing `best.pt` model and a live OpenCV camera. For live play, run the app on the same laptop as the camera. The original desktop OpenCV implementation remains in `rock_paper_scissor.py`.
 
 ```bash
 cd projects/rock-paper-scissors
@@ -9,4 +9,4 @@ python -m pip install -r requirements.txt
 streamlit run streamlit_app.py --server.port 8604
 ```
 
-Use browser camera capture or upload a gesture image. A single Rock/Paper/Scissors detection at 60% confidence or higher must be explicitly confirmed. The computer chooses first; one confirmed round updates the score once. Play Again starts a new round; Reset Score clears all totals. The app loads this directory's original `best.pt`, without training or fallback model substitution.
+Click **Start live camera** and allow camera access to Terminal (or the app running Streamlit) in macOS **System Settings → Privacy & Security → Camera**. Player 1 stands on the left and Player 2 on the right of the center divider. When both gestures are detected at 60% confidence or higher, click **Play Round** once. Play Again starts a fresh round; Reset Score clears all totals. The app loads the original `best.pt`, without training or fallback model substitution. Streamlit Cloud cannot access the visitor's laptop camera through OpenCV; run this page locally for camera play.

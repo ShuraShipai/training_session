@@ -1,6 +1,5 @@
 # Target Python 3.12. Resolution/build must be verified on the deployment host.
 streamlit==1.51.0
-streamlit-webrtc==0.70.1
 gTTS==2.5.4
 SpeechRecognition==3.17.0
 Pillow==11.3.0

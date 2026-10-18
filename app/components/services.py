@@ -134,4 +134,13 @@ def detect_live_gestures(frame):
                 ((x1 + x2) / 2) / frame_width,
             ))
         annotated = result.plot()
+        # Keep the two-player camera lanes visible in every returned frame.
+        import cv2
+        height, width = annotated.shape[:2]
+        divider_x = width // 2
+        cv2.line(annotated, (divider_x, 0), (divider_x, height), (80, 190, 110), 3)
+        cv2.putText(annotated, "PLAYER 1", (18, 34), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8, (80, 190, 110), 2, cv2.LINE_AA)
+        cv2.putText(annotated, "PLAYER 2", (divider_x + 18, 34), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8, (80, 190, 110), 2, cv2.LINE_AA)
     return detections, annotated
