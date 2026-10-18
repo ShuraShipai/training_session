@@ -30,7 +30,6 @@
     <div class="label right">PLAYER 2 · RIGHT</div>
     <div class="controls">
       <button id="start">Start live camera</button>
-      <button id="capture-round" class="hidden">Capture &amp; Play Round</button>
       <button id="stop" class="stop hidden">Stop camera</button>
       <div id="status" class="status" role="status">Start the camera and allow browser access.</div>
     </div>
@@ -44,8 +43,10 @@
     const startButton = document.getElementById("start");
     const stopButton = document.getElementById("stop");
     let stream = null;
-    const captureButton = document.getElementById("capture-round");
-    let captureDisabled = false;
+    let liveEnabled = false;
+    let sampleTimer = null;
+    let awaitingRender = false;
+    let awaitingCaptureId = null;
 
     function send(type, fields = {}) {
       window.parent.postMessage({ isStreamlitMessage: true, type, ...fields }, "*");
@@ -55,7 +56,7 @@
       send("streamlit:setFrameHeight", { height: Math.round(width * 9 / 16) + 2 });
     }
     function captureFrame() {
-      if (!stream || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
+      if (!stream || awaitingRender || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
       const sourceWidth = video.videoWidth;
       const sourceHeight = video.videoHeight;
       if (!sourceWidth || !sourceHeight) return false;
@@ -69,15 +70,27 @@
       context.scale(-1, 1);
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       context.setTransform(1, 0, 0, 1, 0, 0);
+      awaitingCaptureId = window.crypto.randomUUID();
       send("streamlit:setComponentValue", {
         value: {
-          capture_id: window.crypto.randomUUID(),
+          capture_id: awaitingCaptureId,
           image: canvas.toDataURL("image/jpeg", 0.9)
         },
         dataType: "json"
       });
-      statusBox.textContent = "Frame sent · checking both gestures once…";
+      awaitingRender = true;
+      statusBox.textContent = liveEnabled ? "Live preview · checking gestures…" : "Live preview · start the game to detect gestures.";
       return true;
+    }
+    function stopSampling() {
+      if (sampleTimer !== null) window.clearTimeout(sampleTimer);
+      sampleTimer = null;
+    }
+    function startSampling() {
+      stopSampling();
+      if (!stream || !liveEnabled) return;
+      // Start with one frame; after that, wait for inference acknowledgement.
+      if (!captureFrame()) sampleTimer = window.setTimeout(startSampling, 300);
     }
     function stopCamera() {
       if (stream && video.videoWidth && video.videoHeight) {
@@ -92,10 +105,10 @@
         stoppedFrame.classList.remove("hidden");
       }
       if (stream) stream.getTracks().forEach(track => track.stop());
+      stopSampling();
       stream = null;
       video.srcObject = null;
       startButton.classList.remove("hidden");
-      captureButton.classList.add("hidden");
       stopButton.classList.add("hidden");
       statusBox.textContent = "Camera stopped.";
     }
@@ -111,10 +124,9 @@
         video.srcObject = stream;
         await video.play();
         startButton.classList.add("hidden");
-        captureButton.classList.remove("hidden");
-        captureButton.disabled = captureDisabled;
         stopButton.classList.remove("hidden");
-        statusBox.textContent = "Live preview · both players show a gesture, then capture one round.";
+        statusBox.textContent = liveEnabled ? "Live preview · automatic detection is running." : "Live preview · start the game to detect gestures.";
+        startSampling();
       } catch (error) {
         const reason = error && error.name === "NotAllowedError"
           ? "Camera access was blocked. Allow it in your browser's site permissions and reload."
@@ -124,22 +136,37 @@
         startButton.disabled = false;
       }
     }
-    captureButton.addEventListener("click", () => {
-      if (captureDisabled || captureButton.disabled) return;
-      captureButton.disabled = true;
-      if (!captureFrame()) {
-        captureButton.disabled = false;
-        statusBox.textContent = "Camera is not ready yet. Try again in a moment.";
-      }
-    });
     startButton.addEventListener("click", startCamera);
     stopButton.addEventListener("click", stopCamera);
     window.addEventListener("resize", resizeFrame);
     window.addEventListener("message", event => {
       if (!event.data || event.data.type !== "streamlit:render") return;
-      captureDisabled = Boolean(event.data.args && event.data.args.capture_disabled);
-      captureButton.disabled = captureDisabled;
-      captureButton.textContent = captureDisabled ? "Round complete" : "Capture & Play Round";
+      const args = event.data.args || {};
+      const nextEnabled = Boolean(args.live_enabled);
+      window.__rpsIntervalMs = args.interval_ms;
+      // The app echoes the processed capture ID after its inference rerun.
+      if (awaitingCaptureId && args.processed_capture_id === awaitingCaptureId) {
+        awaitingCaptureId = null;
+        awaitingRender = false;
+        stopSampling();
+        if (liveEnabled && stream) {
+          const interval = Number(args.interval_ms) || Number(window.__rpsIntervalMs) || 1100;
+          sampleTimer = window.setTimeout(() => {
+            sampleTimer = null;
+            if (!captureFrame()) startSampling();
+          }, interval);
+        }
+      }
+      if (nextEnabled !== liveEnabled) {
+        liveEnabled = nextEnabled;
+        if (liveEnabled) startSampling();
+        else {
+          stopSampling();
+          awaitingCaptureId = null;
+          awaitingRender = false;
+        }
+        if (stream) statusBox.textContent = liveEnabled ? "Live preview · automatic detection is running." : "Live preview · start the game to detect gestures.";
+      }
       resizeFrame();
     });
     send("streamlit:componentReady", { apiVersion: 1 });

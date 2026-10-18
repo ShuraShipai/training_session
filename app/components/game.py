@@ -31,13 +31,7 @@ def valid_detection(detections):
 
 
 def valid_pair(detections):
-    """Pick the strongest confident gesture in each player lane.
-
-    A YOLO frame may contain extra low-confidence or overlapping class boxes for
-    the same hand. Requiring exactly two raw boxes made otherwise usable frames
-    fail. Filter candidates, then choose the strongest detection independently
-    on each side of the visible center line.
-    """
+    """Return an unambiguous confident gesture in each lane, or reject the frame."""
     lanes = {"left": [], "right": []}
     for detection in detections:
         if len(detection) != 3:
@@ -50,6 +44,10 @@ def valid_pair(detections):
         lane = "left" if center_x < 0.5 else "right"
         lanes[lane].append((label, confidence, center_x))
     if not lanes["left"] or not lanes["right"]:
+        return None
+    # Duplicate boxes for one class are harmless; conflicting classes in one
+    # player's zone are ambiguous and must never be scored.
+    if any(len({item[0] for item in lane}) != 1 for lane in lanes.values()):
         return None
     left = max(lanes["left"], key=lambda item: item[1])
     right = max(lanes["right"], key=lambda item: item[1])
@@ -66,13 +64,16 @@ class LocalGame:
     completed: bool = False
     player1: Optional[str] = None
     player2: Optional[str] = None
+    player1_confidence: Optional[float] = None
+    player2_confidence: Optional[float] = None
     result: Optional[str] = None
 
     def confirm(self, detections, round_id):
         pair = valid_pair(detections)
         if self.completed or round_id != self.round_id or pair is None:
             return False
-        self.player1, self.player2 = pair[0][0], pair[1][0]
+        self.player1, self.player1_confidence = pair[0]
+        self.player2, self.player2_confidence = pair[1]
         outcome = winner(self.player1, self.player2)
         self.result = {
             "You Win": "Player 1 Wins",
@@ -89,6 +90,7 @@ class LocalGame:
         self.round_id += 1
         self.completed = False
         self.player1 = self.player2 = self.result = None
+        self.player1_confidence = self.player2_confidence = None
 
     def reset(self):
         self.player1_score = self.player2_score = self.draws = 0
@@ -97,61 +99,108 @@ class LocalGame:
 
 @dataclass
 class LiveRoundTracker:
-    """Debounce live predictions and score one round per pair of hand gestures."""
+    """Automatic round state machine; one inference observation per input frame."""
     stable_moves: Optional[tuple] = None
-    stable_frames: int = 0
+    stable_since: Optional[float] = None
     completed_at: Optional[float] = None
-    neutral_frames: int = 0
+    clear_since: Optional[float] = None
+    clear_observations: int = 0
+    waiting_for_clear: bool = False
     last_round: Optional[tuple] = None
+    state: str = "WAITING_FOR_HANDS"
 
     def reset_candidate(self):
         self.stable_moves = None
-        self.stable_frames = 0
+        self.stable_since = None
 
-    def update(self, game, detections, now, *, frames_to_score=3,
-               frames_to_rearm=4, seconds_to_rearm=2.0):
-        """Consume one new frame; auto-score steady pairs and rearm on release."""
+    def reset(self, game):
+        """Reset scores while requiring a fresh, confirmed hands-down interval."""
+        game.reset()
+        self.reset_candidate()
+        self.completed_at = None
+        self.clear_since = None
+        self.clear_observations = 0
+        self.waiting_for_clear = True
+        self.state = "WAITING_FOR_HANDS_DOWN"
+        self.last_round = None
+
+    def update(self, game, detections, now, *, stable_seconds=0.8,
+               clear_seconds=0.8, min_clear_observations=2):
+        """Consume one sampled frame, debouncing gestures and physical zone release.
+
+        Empty YOLO results are only a proxy for hands-down: this checkpoint has
+        no hand-presence class. Require both zones to remain free of every model
+        box for a timed interval and multiple samples. A single miss cannot rearm.
+        """
         pair = valid_pair(detections)
-        confident_hand_present = any(
-            len(detection) == 3
-            and detection[0] in MOVES
-            and math.isfinite(detection[1])
-            and MIN_CONFIDENCE <= detection[1] <= 1
-            and math.isfinite(detection[2])
-            and 0 <= detection[2] <= 1
-            for detection in detections
+        any_box_in_zones = any(
+            len(d) == 3 and d[0] in MOVES and math.isfinite(d[1])
+            and math.isfinite(d[2]) and 0 <= d[2] <= 1
+            for d in detections
         )
 
         if game.completed:
-            if confident_hand_present:
-                self.neutral_frames = 0
+            self.state = "WAITING_FOR_HANDS_DOWN"
+            if any_box_in_zones:
+                self.clear_since = None
+                self.clear_observations = 0
             else:
-                self.neutral_frames += 1
-            if (self.neutral_frames >= frames_to_rearm
-                    and self.completed_at is not None
-                    and now - self.completed_at >= seconds_to_rearm):
+                if self.clear_since is None:
+                    self.clear_since = now
+                    self.clear_observations = 1
+                else:
+                    self.clear_observations += 1
+            if (self.clear_since is not None
+                    and self.clear_observations >= min_clear_observations
+                    and now - self.clear_since + 1e-9 >= clear_seconds):
                 game.play_again()
                 self.completed_at = None
-                self.neutral_frames = 0
+                self.clear_since = None
+                self.clear_observations = 0
                 self.reset_candidate()
+                self.state = "BOTH_HANDS_CLEARED"
                 return "ready"
             return "round-complete"
 
-        self.neutral_frames = 0
+        if self.waiting_for_clear:
+            self.state = "WAITING_FOR_HANDS_DOWN"
+            if any_box_in_zones:
+                self.clear_since = None
+                self.clear_observations = 0
+                return "hands-down"
+            if self.clear_since is None:
+                self.clear_since = now
+                self.clear_observations = 1
+            else:
+                self.clear_observations += 1
+            if (self.clear_observations >= min_clear_observations
+                    and now - self.clear_since + 1e-9 >= clear_seconds):
+                self.waiting_for_clear = False
+                self.clear_since = None
+                self.clear_observations = 0
+                self.state = "BOTH_HANDS_CLEARED"
+                return "ready"
+            return "clearing"
+
+        self.state = "WAITING_FOR_HANDS"
         if pair is None:
             self.reset_candidate()
             return "waiting"
 
         moves = (pair[0][0], pair[1][0])
-        if moves == self.stable_moves:
-            self.stable_frames += 1
-        else:
+        if moves != self.stable_moves:
             self.stable_moves = moves
-            self.stable_frames = 1
+            self.stable_since = now
+            self.state = "BOTH_HANDS_DETECTED"
+            return "detected"
+        self.state = "VALIDATE_GESTURES"
 
-        if self.stable_frames >= frames_to_score and game.confirm(detections, game.round_id):
+        if (self.stable_since is not None
+                and now - self.stable_since >= stable_seconds
+                and game.confirm(detections, game.round_id)):
             self.completed_at = now
             self.last_round = (game.result, game.player1, game.player2)
+            self.state = "ROUND_COMPLETE"
             return "scored"
         return "countdown"
 

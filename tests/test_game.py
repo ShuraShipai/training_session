@@ -108,15 +108,14 @@ class GameTests(unittest.TestCase):
         self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
 
     def test_live_pair_uses_strongest_confident_box_in_each_lane(self):
-        # Extra YOLO boxes can be duplicate/overlapping class hypotheses for a
-        # hand. Keep the strongest candidate in each player half.
+        # Same-label duplicates are safe; conflicting gestures in one zone fail closed.
         detections = [
-            ("Scissors", .68, .24),
             ("Paper", .91, .27),
             ("Rock", .86, .78),
             ("Rock", .42, .80),
         ]
         self.assertEqual(valid_pair(detections), (("Paper", .91), ("Rock", .86)))
+        self.assertIsNone(valid_pair(detections + [("Scissors", .68, .24)]))
 
     def test_live_round_scores_once_replay_and_reset(self):
         game = LocalGame()
@@ -136,19 +135,63 @@ class GameTests(unittest.TestCase):
         game = LocalGame()
         tracker = LiveRoundTracker()
         pair = [("Paper", .91, .2), ("Rock", .86, .8)]
-        self.assertEqual(tracker.update(game, pair, 0.0), "countdown")
+        self.assertEqual(tracker.update(game, pair, 0.0), "detected")
         self.assertEqual(tracker.update(game, pair, 0.4), "countdown")
         self.assertEqual(tracker.update(game, pair, 0.8), "scored")
         self.assertEqual((game.player1_score, game.player2_score, game.draws), (1, 0, 0))
         for index in range(3):
             self.assertEqual(tracker.update(game, pair, 1.2 + index * .4), "round-complete")
         self.assertEqual(game.player1_score, 1)
-        for index in range(4):
-            status = tracker.update(game, [], 3.0 + index * .4)
+        status = tracker.update(game, [], 3.0)
+        self.assertEqual(status, "round-complete")
+        status = tracker.update(game, [], 3.8)
         self.assertEqual(status, "ready")
         self.assertFalse(game.completed)
         self.assertEqual(game.round_id, 1)
-        for index in range(3):
-            status = tracker.update(game, pair, 4.8 + index * .4)
-        self.assertEqual(status, "scored")
+        self.assertEqual(tracker.update(game, pair, 5.1), "detected")
+        self.assertEqual(tracker.update(game, pair, 6.0), "scored")
         self.assertEqual(game.player1_score, 2)
+
+    def test_single_dropout_does_not_rearm_or_score_incomplete_pair(self):
+        game = LocalGame()
+        tracker = LiveRoundTracker()
+        pair = [("Rock", .9, .2), ("Scissors", .9, .8)]
+        self.assertEqual(tracker.update(game, pair, 0), "detected")
+        self.assertEqual(tracker.update(game, pair, .8), "scored")
+        self.assertEqual(tracker.update(game, [], 1.0), "round-complete")
+        self.assertEqual(tracker.update(game, pair[:1], 2.0), "round-complete")
+        self.assertEqual(tracker.update(game, pair, 2.4), "round-complete")
+        self.assertEqual(game.player1_score, 1)
+
+    def test_one_lowered_hand_blocks_rearm_until_both_zones_clear(self):
+        game = LocalGame()
+        tracker = LiveRoundTracker()
+        pair = [("Rock", .9, .2), ("Scissors", .9, .8)]
+        self.assertEqual(tracker.update(game, pair, 0.0), "detected")
+        self.assertEqual(tracker.update(game, pair, .8), "scored")
+        self.assertEqual(tracker.update(game, [], 1.0), "round-complete")
+        self.assertEqual(tracker.update(game, pair[:1], 1.8), "round-complete")
+        self.assertEqual(tracker.update(game, [], 2.0), "round-complete")
+        self.assertEqual(tracker.update(game, [], 2.8), "ready")
+        self.assertEqual(game.round_id, 1)
+
+    def test_one_player_only_never_scores_and_reset_waits_for_clear(self):
+        game = LocalGame()
+        tracker = LiveRoundTracker()
+        only_left = [("Rock", .9, .2)]
+        only_right = [("Paper", .9, .8)]
+        for sample_time in (0.0, .9, 1.8):
+            self.assertEqual(tracker.update(game, only_left, sample_time), "waiting")
+        for sample_time in (2.7, 3.6, 4.5):
+            self.assertEqual(tracker.update(game, only_right, sample_time), "waiting")
+        self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
+
+        pair = [("Rock", .9, .2), ("Rock", .9, .8)]
+        tracker.update(game, pair, 5.0)
+        self.assertEqual(tracker.update(game, pair, 5.9), "scored")
+        tracker.reset(game)
+        self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
+        self.assertEqual(tracker.update(game, pair, 6.0), "hands-down")
+        for sample_time in (7.0, 7.8):
+            result = tracker.update(game, [], sample_time)
+        self.assertEqual(result, "ready")

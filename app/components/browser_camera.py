@@ -10,10 +10,13 @@ _camera_component = components.declare_component(
 )
 
 
-def browser_camera(*, key, capture_disabled=False):
-    """Show a live browser preview and return a frame only after explicit capture."""
+def browser_camera(*, key, live_enabled=False, processed_capture_id=None,
+                   interval_ms=1100):
+    """Show live preview and request the next frame after server inference ends."""
     return _camera_component(
         key=key,
-        capture_disabled=capture_disabled,
+        live_enabled=live_enabled,
+        processed_capture_id=processed_capture_id,
+        interval_ms=interval_ms,
         default=None,
     )

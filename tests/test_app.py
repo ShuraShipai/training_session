@@ -57,7 +57,7 @@ class AppTests(unittest.TestCase):
         app.session_state["local_rps_game"] = LocalGame()
         app.run()
         self.assertTrue(any(b.label == "Reset Score" for b in app.button))
-        self.assertTrue(any(m.label == "Player 1" for m in app.metric))
+        self.assertTrue(any(m.label == "Player 1 wins" for m in app.metric))
         self.assertFalse(app.exception)
 
     def test_live_rps_page_and_unready_round(self):
@@ -76,21 +76,26 @@ class AppTests(unittest.TestCase):
         cv2_stub = ModuleType("cv2")
         cv2_stub.IMREAD_COLOR = 1
         cv2_stub.imdecode = lambda *_args: np.zeros((16, 16, 3), dtype=np.uint8)
-        annotated = np.zeros((16, 16, 3), dtype=np.uint8)
         detections = [("Paper", .91, .2), ("Rock", .86, .8)]
 
         with patch("app.components.browser_camera._camera_component", return_value=None) as component, \
-             patch("app.components.services.detect_live_gestures", return_value=(detections, annotated)) as predict, \
+             patch("app.components.services.detect_live_gestures", return_value=(detections, None)) as predict, \
+             patch("app.pages.rock_paper_scissors.time.monotonic", side_effect=[1.0, 1.9]), \
              patch.dict("sys.modules", {"cv2": cv2_stub}):
             app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
+            next(button for button in app.button if button.label == "Start Game").click().run()
             component.return_value = payload
             app.run()
             self.assertFalse(app.exception)
             self.assertEqual(predict.call_count, 1)
+            self.assertEqual(app.session_state["local_rps_game"].player1_score, 0)
+            component.return_value = {**payload, "capture_id": "capture-2"}
+            app.run()
+            self.assertFalse(app.exception)
             self.assertEqual(app.session_state["local_rps_game"].player1_score, 1)
             app.run()
             self.assertFalse(app.exception)
-            self.assertEqual(predict.call_count, 1)
+            self.assertEqual(predict.call_count, 2)
 
     def test_gesture_model_resource_is_loaded_once(self):
         from app.components import services
