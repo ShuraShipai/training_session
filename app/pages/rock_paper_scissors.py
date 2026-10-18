@@ -1,12 +1,10 @@
-"""Live two-player camera game using browser capture and the existing YOLO model."""
+"""Two-player camera game; run one YOLO prediction for each captured round."""
 import base64
-import hashlib
-import time
 
 import streamlit as st
 
 from app.components.browser_camera import browser_camera
-from app.components.game import LiveRoundTracker, LocalGame, MIN_CONFIDENCE, valid_pair
+from app.components.game import LocalGame, MIN_CONFIDENCE, valid_pair
 from app.components.services import detect_live_gestures
 
 
@@ -20,119 +18,113 @@ with st.expander("How to play"):
         - **Paper beats Rock.**
         - Matching gestures are a **draw**.
 
-        Show one gesture each. After the score appears, both players lower their hands;
-        the next round starts automatically when you show your gestures again.
+        Keep the live preview open. Both players show a gesture, then capture once
+        to play the round. Lower your hands before starting the next round.
         """
     )
 
 if "local_rps_game" not in st.session_state:
     st.session_state.local_rps_game = LocalGame()
-if "browser_frame_digest" not in st.session_state:
-    st.session_state.browser_frame_digest = None
-if "browser_detections" not in st.session_state:
-    st.session_state.browser_detections = ()
-if "browser_frame_time" not in st.session_state:
-    st.session_state.browser_frame_time = 0.0
-if "browser_camera_error" not in st.session_state:
-    st.session_state.browser_camera_error = None
-if "live_round_tracker" not in st.session_state:
-    st.session_state.live_round_tracker = LiveRoundTracker()
+if "last_processed_capture_id" not in st.session_state:
+    st.session_state.last_processed_capture_id = None
+if "latest_round_capture" not in st.session_state:
+    st.session_state.latest_round_capture = None
 
 game = st.session_state.local_rps_game
-
-
-def reset_game():
-    game.reset()
-    tracker = st.session_state.live_round_tracker
-    tracker.completed_at = None
-    tracker.neutral_frames = 0
-    tracker.last_round = None
-    tracker.reset_candidate()
-
-
-score_columns = st.columns(3)
-score_columns[0].metric("Player 1", game.player1_score)
-score_columns[1].metric("Player 2", game.player2_score)
-score_columns[2].metric("Draws", game.draws)
-
+scores = st.empty()
 controls = st.columns([1, 1, 4])
-controls[0].button("Reset Score", on_click=reset_game)
+
+if controls[0].button("Reset Score"):
+    game.reset()
+    st.session_state.latest_round_capture = None
+    st.rerun()
 if game.completed and controls[1].button("Next Round", type="primary"):
     game.play_again()
-    st.session_state.live_round_tracker.completed_at = None
-    st.session_state.live_round_tracker.neutral_frames = 0
-    st.session_state.live_round_tracker.reset_candidate()
+    st.session_state.latest_round_capture = None
+    st.rerun()
 
-st.caption(f"Live YOLO detection · one gesture per side · minimum confidence {MIN_CONFIDENCE:.0%}")
-frame_data_url = browser_camera(key="rps_browser_camera", target_fps=2.5)
+st.caption(
+    f"One YOLO prediction per captured round · existing model · "
+    f"minimum confidence {MIN_CONFIDENCE:.0%}"
+)
+capture = browser_camera(
+    key="rps_browser_camera",
+    capture_disabled=game.completed,
+)
 
-# The component sends compact frames over the existing Streamlit connection. This
-# avoids WebRTC ICE/TURN services while keeping camera capture in the browser.
-if isinstance(frame_data_url, str) and frame_data_url.startswith("data:image/jpeg;base64,"):
-    digest = hashlib.sha256(frame_data_url.encode("ascii")).hexdigest()
-    if digest != st.session_state.browser_frame_digest:
-        st.session_state.browser_frame_digest = digest
+# A new capture ID is generated only when the player presses Capture & Play Round.
+# Re-renders of the same component value therefore never repeat model inference.
+if isinstance(capture, dict):
+    capture_id = capture.get("capture_id")
+    image_data_url = capture.get("image")
+    is_new_capture = (
+        isinstance(capture_id, str)
+        and bool(capture_id)
+        and capture_id != st.session_state.last_processed_capture_id
+    )
+    if is_new_capture and isinstance(image_data_url, str) and image_data_url.startswith(
+        "data:image/jpeg;base64,"
+    ) and not game.completed:
+        # Mark before inference so a Streamlit rerun cannot score this frame twice.
+        st.session_state.last_processed_capture_id = capture_id
         try:
             import cv2
             import numpy as np
 
-            encoded = base64.b64decode(frame_data_url.partition(",")[2], validate=True)
+            encoded = base64.b64decode(image_data_url.partition(",")[2], validate=True)
             frame = cv2.imdecode(np.frombuffer(encoded, dtype=np.uint8), cv2.IMREAD_COLOR)
             if frame is None:
-                raise ValueError("The browser camera frame could not be decoded.")
-            detections, _annotated = detect_live_gestures(frame)
-            st.session_state.browser_detections = tuple(detections)
-            st.session_state.browser_frame_time = time.monotonic()
-            tracker_status = st.session_state.live_round_tracker.update(
-                game, detections, st.session_state.browser_frame_time
-            )
-            st.session_state.live_round_status = tracker_status
-            st.session_state.browser_camera_error = None
+                raise ValueError("The camera frame could not be decoded.")
+            detections, annotated = detect_live_gestures(frame)
+            scored = game.confirm(detections, game.round_id)
+            st.session_state.latest_round_capture = {
+                "detections": tuple(detections),
+                "annotated": annotated,
+                "error": None,
+                "scored": scored,
+            }
         except Exception as error:
-            st.session_state.browser_detections = ()
-            st.session_state.browser_camera_error = f"Live detection failed: {type(error).__name__}: {error}"
+            st.session_state.latest_round_capture = {
+                "detections": (),
+                "annotated": None,
+                "error": f"Prediction failed: {type(error).__name__}: {error}",
+                "scored": False,
+            }
 
-if st.session_state.browser_camera_error:
-    st.error(st.session_state.browser_camera_error)
+with scores.container():
+    score_columns = st.columns(3)
+    score_columns[0].metric("Player 1", game.player1_score)
+    score_columns[1].metric("Player 2", game.player2_score)
+    score_columns[2].metric("Draws", game.draws)
 
-fresh = time.monotonic() - st.session_state.browser_frame_time < 2.5
-detections = st.session_state.browser_detections if fresh else ()
-pair = valid_pair(detections)
-if pair:
-    left, right = pair
-    left_col, right_col = st.columns(2)
-    left_col.metric("Player 1 · left", left[0], f"{left[1]:.0%} confidence")
-    right_col.metric("Player 2 · right", right[0], f"{right[1]:.0%} confidence")
-    if not game.completed:
-        stable = st.session_state.live_round_tracker.stable_frames
-        st.info(f"Hold steady — scoring automatically after {max(0, 3 - stable)} more clear frames.")
-elif st.session_state.browser_frame_time and fresh:
-    if detections:
-        seen = []
-        for detection in detections:
-            if len(detection) == 3:
-                label, confidence, center_x = detection
-                side = "left" if center_x < 0.5 else "right"
-                seen.append(f"{label} · {confidence:.0%} · {side} side")
-            else:
-                seen.append(f"{detection[0]} · {detection[1]:.0%}")
-        st.warning("YOLO sees: " + " | ".join(seen))
-        st.caption(
-            "A confident gesture is needed in each half. If YOLO returns extra boxes, "
-            f"the strongest box per side is used; confidence threshold is {MIN_CONFIDENCE:.0%}."
-        )
+latest = st.session_state.latest_round_capture
+if latest:
+    if latest["error"]:
+        st.error(latest["error"])
     else:
-        st.warning("YOLO did not recognize a hand gesture in the latest frame.")
-        st.caption("Move both hands closer to the camera, keep them inside the frame, and improve the lighting.")
-else:
-    st.info("Press **Start live camera** in the camera view and allow this site to use your camera.")
+        st.image(latest["annotated"], channels="BGR", width="stretch")
+        pair = valid_pair(latest["detections"])
+        if pair and latest["scored"]:
+            left, right = pair
+            st.success(
+                f"{game.result} · Player 1: {left[0]} ({left[1]:.0%}) · "
+                f"Player 2: {right[0]} ({right[1]:.0%})"
+            )
+        elif pair:
+            st.info("This round was already scored. Start the next round to play again.")
+        else:
+            st.warning(
+                "No point awarded. Show one clear Rock, Paper, or Scissors gesture "
+                "on each side of the center line, then capture the round again."
+            )
+            if latest["detections"]:
+                seen = " · ".join(
+                    f"{label} {confidence:.0%} at {center_x:.0%} across the frame"
+                    for label, confidence, center_x in latest["detections"]
+                )
+                st.caption(f"Model detections: {seen}")
 
 if game.completed:
-    st.success(game.result)
-    st.write(f"Player 1: **{game.player1}** · Player 2: **{game.player2}**")
-    st.caption("Hands down to arm the next round. The camera stays live; show both gestures again when ready.")
-elif st.session_state.get("live_round_status") == "ready":
-    st.success("Next round ready — show both gestures.")
-elif st.session_state.live_round_tracker.last_round:
-    result, player1, player2 = st.session_state.live_round_tracker.last_round
-    st.caption(f"Last round: {result} · Player 1: {player1} · Player 2: {player2}")
+    st.caption("Both players lower their hands, then press Next Round when ready.")
+else:
+    st.caption("The camera preview stays live; YOLO runs only when you capture a round.")

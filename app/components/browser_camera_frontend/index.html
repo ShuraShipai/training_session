@@ -30,6 +30,7 @@
     <div class="label right">PLAYER 2 · RIGHT</div>
     <div class="controls">
       <button id="start">Start live camera</button>
+      <button id="capture-round" class="hidden">Capture &amp; Play Round</button>
       <button id="stop" class="stop hidden">Stop camera</button>
       <div id="status" class="status" role="status">Start the camera and allow browser access.</div>
     </div>
@@ -43,8 +44,8 @@
     const startButton = document.getElementById("start");
     const stopButton = document.getElementById("stop");
     let stream = null;
-    let timer = null;
-    let fps = 2.5;
+    const captureButton = document.getElementById("capture-round");
+    let captureDisabled = false;
 
     function send(type, fields = {}) {
       window.parent.postMessage({ isStreamlitMessage: true, type, ...fields }, "*");
@@ -54,10 +55,10 @@
       send("streamlit:setFrameHeight", { height: Math.round(width * 9 / 16) + 2 });
     }
     function captureFrame() {
-      if (!stream || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (!stream || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
       const sourceWidth = video.videoWidth;
       const sourceHeight = video.videoHeight;
-      if (!sourceWidth || !sourceHeight) return;
+      if (!sourceWidth || !sourceHeight) return false;
       // Keep the browser frame at camera resolution: shrinking to 640x360 made
       // the original checkpoint miss the second player's smaller hand.
       const scale = Math.min(1, 1280 / sourceWidth, 720 / sourceHeight);
@@ -66,13 +67,16 @@
       const context = canvas.getContext("2d", { alpha: false });
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       send("streamlit:setComponentValue", {
-        value: canvas.toDataURL("image/jpeg", 0.9),
-        dataType: "string"
+        value: {
+          capture_id: window.crypto.randomUUID(),
+          image: canvas.toDataURL("image/jpeg", 0.9)
+        },
+        dataType: "json"
       });
+      statusBox.textContent = "Frame sent · checking both gestures once…";
+      return true;
     }
     function stopCamera() {
-      if (timer) window.clearInterval(timer);
-      timer = null;
       if (stream && video.videoWidth && video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -84,6 +88,7 @@
       stream = null;
       video.srcObject = null;
       startButton.classList.remove("hidden");
+      captureButton.classList.add("hidden");
       stopButton.classList.add("hidden");
       statusBox.textContent = "Camera stopped.";
     }
@@ -99,10 +104,10 @@
         video.srcObject = stream;
         await video.play();
         startButton.classList.add("hidden");
+        captureButton.classList.remove("hidden");
+        captureButton.disabled = captureDisabled;
         stopButton.classList.remove("hidden");
-        statusBox.textContent = "Live · one hand on each side · show gestures together.";
-        timer = window.setInterval(captureFrame, Math.max(250, 1000 / fps));
-        captureFrame();
+        statusBox.textContent = "Live preview · both players show a gesture, then capture one round.";
       } catch (error) {
         const reason = error && error.name === "NotAllowedError"
           ? "Camera access was blocked. Allow it in your browser's site permissions and reload."
@@ -112,13 +117,22 @@
         startButton.disabled = false;
       }
     }
+    captureButton.addEventListener("click", () => {
+      if (captureDisabled || captureButton.disabled) return;
+      captureButton.disabled = true;
+      if (!captureFrame()) {
+        captureButton.disabled = false;
+        statusBox.textContent = "Camera is not ready yet. Try again in a moment.";
+      }
+    });
     startButton.addEventListener("click", startCamera);
     stopButton.addEventListener("click", stopCamera);
     window.addEventListener("resize", resizeFrame);
     window.addEventListener("message", event => {
       if (!event.data || event.data.type !== "streamlit:render") return;
-      const requestedFps = Number(event.data.args && event.data.args.target_fps);
-      if (Number.isFinite(requestedFps)) fps = Math.max(1, Math.min(4, requestedFps));
+      captureDisabled = Boolean(event.data.args && event.data.args.capture_disabled);
+      captureButton.disabled = captureDisabled;
+      captureButton.textContent = captureDisabled ? "Round complete" : "Capture & Play Round";
       resizeFrame();
     });
     send("streamlit:componentReady", { apiVersion: 1 });

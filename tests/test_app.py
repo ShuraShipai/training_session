@@ -2,6 +2,8 @@ from io import BytesIO
 from pathlib import Path
 import hashlib
 import json
+import base64
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -63,6 +65,53 @@ class AppTests(unittest.TestCase):
         self.assertTrue(any(b.label == "Reset Score" for b in app.button))
         self.assertEqual(app.session_state["local_rps_game"].player1_score, 0)
         self.assertFalse(app.exception)
+
+    def test_one_prediction_per_unique_round_capture(self):
+        import numpy as np
+
+        payload = {
+            "capture_id": "capture-1",
+            "image": "data:image/jpeg;base64," + base64.b64encode(b"frame").decode("ascii"),
+        }
+        cv2_stub = ModuleType("cv2")
+        cv2_stub.IMREAD_COLOR = 1
+        cv2_stub.imdecode = lambda *_args: np.zeros((16, 16, 3), dtype=np.uint8)
+        annotated = np.zeros((16, 16, 3), dtype=np.uint8)
+        detections = [("Paper", .91, .2), ("Rock", .86, .8)]
+
+        with patch("app.components.browser_camera._camera_component", return_value=None) as component, \
+             patch("app.components.services.detect_live_gestures", return_value=(detections, annotated)) as predict, \
+             patch.dict("sys.modules", {"cv2": cv2_stub}):
+            app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
+            component.return_value = payload
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(predict.call_count, 1)
+            self.assertEqual(app.session_state["local_rps_game"].player1_score, 1)
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual(predict.call_count, 1)
+
+    def test_gesture_model_resource_is_loaded_once(self):
+        from app.components import services
+
+        model_path = ROOT / "projects/rock-paper-scissors/best.pt"
+        model = SimpleNamespace(names={0: "Paper", 1: "Rock", 2: "Scissors"})
+        ultralytics_stub = ModuleType("ultralytics")
+        with patch("app.components.services.MODEL_PATH", model_path), \
+             patch("app.components.services.MODEL_SHA256", hashlib.sha256(model_path.read_bytes()).hexdigest()), \
+             patch.dict("sys.modules", {"ultralytics": ultralytics_stub}):
+            from unittest.mock import Mock
+            ultralytics_stub.YOLO = Mock(return_value=model)
+            services.gesture_model.clear()
+            try:
+                loaded_once = services.gesture_model()
+                loaded_twice = services.gesture_model()
+                self.assertIs(loaded_once, model)
+                self.assertIs(loaded_twice, model)
+                ultralytics_stub.YOLO.assert_called_once_with(str(model_path))
+            finally:
+                services.gesture_model.clear()
 
     def test_originals_preserved(self):
         manifest = json.loads((ROOT / "deployment/original-files.json").read_text())

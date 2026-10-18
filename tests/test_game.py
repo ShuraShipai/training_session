@@ -1,5 +1,7 @@
 import unittest
-from app.components.game import Game, LiveRoundTracker, LocalGame, winner, valid_detection, valid_pair
+from app.components.game import (
+    MIN_CONFIDENCE, Game, LiveRoundTracker, LocalGame, winner, valid_detection, valid_pair,
+)
 
 
 class GameTests(unittest.TestCase):
@@ -94,6 +96,16 @@ class GameTests(unittest.TestCase):
                 self.assertIsNone(valid_pair(detections))
                 self.assertFalse(game.confirm(detections, game.round_id))
                 self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
+
+    def test_live_pair_requires_both_gestures_to_meet_existing_threshold(self):
+        # The strong Rock is valid, but the Scissors detection is below 60%,
+        # so the two-player round is incomplete and must not score.
+        detections = [("Rock", .8489, .829), ("Scissors", .3677, .230)]
+        game = LocalGame()
+        self.assertEqual(MIN_CONFIDENCE, .60)
+        self.assertIsNone(valid_pair(detections))
+        self.assertFalse(game.confirm(detections, game.round_id))
+        self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
 
     def test_live_pair_uses_strongest_confident_box_in_each_lane(self):
         # Extra YOLO boxes can be duplicate/overlapping class hypotheses for a

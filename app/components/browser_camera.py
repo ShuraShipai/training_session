@@ -10,6 +10,10 @@ _camera_component = components.declare_component(
 )
 
 
-def browser_camera(*, key, target_fps=2.5):
-    """Return the most recent browser JPEG data URL, or None before camera starts."""
-    return _camera_component(key=key, target_fps=target_fps, default=None)
+def browser_camera(*, key, capture_disabled=False):
+    """Show a live browser preview and return a frame only after explicit capture."""
+    return _camera_component(
+        key=key,
+        capture_disabled=capture_disabled,
+        default=None,
+    )

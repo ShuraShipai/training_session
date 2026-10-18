@@ -5,9 +5,8 @@ import secrets
 from typing import Optional
 
 MOVES = ("Rock", "Paper", "Scissors")
-# The preserved checkpoint returns the second hand at ~0.27–0.50 confidence
-# on the user's actual camera view. A 0.60 gate discarded valid gestures.
-MIN_CONFIDENCE = 0.25
+# Keep the deployed game's existing confidence requirement unchanged.
+MIN_CONFIDENCE = 0.60
 
 
 def winner(player, computer):
