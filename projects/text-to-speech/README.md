@@ -1,3 +1,12 @@
-# text-to-speech
+# Text-to-Speech
 
-Original `tts_maker.py` is preserved byte-for-byte. Run it standalone with `streamlit run projects/text-to-speech/tts_maker.py`. The unified page retains gTTS, four language codes, speed selection, playback and MP3 output; adds request timeouts and ties outputs to their inputs.
+Independent Streamlit app preserving the existing gTTS languages and speech generation.
+
+```bash
+cd projects/text-to-speech
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+streamlit run tts_maker.py --server.port 8602
+```
+
+Enter text, choose English/Hindi/Kannada/Tamil, generate, play, or download MP3. Requires Google service connectivity.

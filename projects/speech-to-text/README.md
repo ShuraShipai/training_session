@@ -1,3 +1,12 @@
-# speech-to-text
+# Speech-to-Text
 
-Original `stt_maker.py` is preserved byte-for-byte. Run it standalone with `streamlit run projects/speech-to-text/stt_maker.py`. The unified page retains recognize_google, all ten language codes, 16 kHz browser recording and WAV uploads; adds bounded inputs, a request timeout and a copyable transcript.
+Independent Streamlit app preserving SpeechRecognition with Google's recognition service and the existing language options.
+
+```bash
+cd projects/speech-to-text
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+streamlit run stt_maker.py --server.port 8603
+```
+
+Record in the browser or upload WAV. Requires microphone permission for recording and internet connectivity for transcription.

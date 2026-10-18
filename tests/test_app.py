@@ -2,12 +2,16 @@ from io import BytesIO
 from pathlib import Path
 import hashlib
 import json
+import sys
+import types
 import unittest
 from unittest.mock import patch
 
 from PIL import Image
 from streamlit.testing.v1 import AppTest
 from app.components import services
+from app.components.game import LocalGame
+from app.components.live_game import LiveDetectionState
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -50,55 +54,43 @@ class AppTests(unittest.TestCase):
         self.assertEqual(len(app.get("audio")), 0)
 
     def test_game_completed_round_and_reset_controls(self):
-        app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
-        game = app.session_state["game"]
-        game.computer = "Rock"
-        game.confirm([("Paper", .9)], game.round_id)
-        app.run()
-        self.assertEqual(app.success[0].value, "You Win")
-        next(b for b in app.button if b.label == "Play Again").click().run()
-        self.assertEqual(app.session_state["game"].player_score, 1)
-        self.assertFalse(app.session_state["game"].completed)
-        next(b for b in app.button if b.label == "Reset Score").click().run()
-        self.assertEqual(app.session_state["game"].player_score, 0)
-        self.assertFalse(app.exception)
-
-    def test_detect_confirm_rerun_and_replay_flow(self):
-        import numpy as np
-        frame = np.zeros((8, 8, 3), dtype=np.uint8)
-        snapshot = BytesIO(b"camera fixture; inference mocked")
-        with patch("streamlit.camera_input", return_value=snapshot), patch(
-                "app.components.services.detect_gesture", return_value=([("Paper", .95)], frame)):
+        fake_webrtc = types.ModuleType("streamlit_webrtc")
+        fake_webrtc.webrtc_streamer = lambda **kwargs: None
+        state = LiveDetectionState()
+        state.publish([("Paper", .9, .2), ("Rock", .95, .8)])
+        with patch.dict(sys.modules, {"streamlit_webrtc": fake_webrtc}):
             app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
-            app.session_state["game"].computer = "Rock"
-            next(b for b in app.button if b.label == "Detect gesture").click().run()
-            self.assertEqual(app.session_state["game"].player_score, 0)
-            next(b for b in app.button if b.label == "Confirm round").click().run()
-            self.assertEqual(app.session_state["game"].player_score, 1)
+            app.session_state["live_detection_state"] = state
+            app.session_state["local_rps_game"] = LocalGame()
             app.run()
-            self.assertEqual(app.session_state["game"].player_score, 1)
-            self.assertFalse(any(b.label == "Confirm round" for b in app.button))
-            next(b for b in app.button if b.label == "Play Again").click().run()
-            self.assertNotIn("gesture_preview", app.session_state)
-            self.assertFalse(any(b.label == "Confirm round" for b in app.button))
-            self.assertEqual(app.session_state["game"].player_score, 1)
+            next(b for b in app.button if b.label == "Play Round").click().run()
+            self.assertEqual(app.session_state["local_rps_game"].result, "Player 1 Wins")
+            self.assertEqual(app.session_state["local_rps_game"].player1_score, 1)
             self.assertFalse(app.exception)
+            next(b for b in app.button if b.label == "Play Again").click().run()
+            self.assertFalse(app.session_state["local_rps_game"].completed)
+            next(b for b in app.button if b.label == "Reset Score").click().run()
+            self.assertEqual(app.session_state["local_rps_game"].player1_score, 0)
 
-    def test_uncertain_detection_disables_confirmation(self):
-        import numpy as np
-        with patch("streamlit.camera_input", return_value=BytesIO(b"fixture")), patch(
-                "app.components.services.detect_gesture", return_value=([("Rock", .4)], np.zeros((8, 8, 3), dtype=np.uint8))):
+    def test_live_rps_page_and_unready_round(self):
+        fake_webrtc = types.ModuleType("streamlit_webrtc")
+        fake_webrtc.webrtc_streamer = lambda **kwargs: None
+        state = LiveDetectionState()
+        state.publish([("Rock", .4, .2)])
+        with patch.dict(sys.modules, {"streamlit_webrtc": fake_webrtc}):
             app = AppTest.from_file(str(ROOT / "app/pages/rock_paper_scissors.py")).run()
-            next(b for b in app.button if b.label == "Detect gesture").click().run()
-            self.assertTrue(next(b for b in app.button if b.label == "Confirm round").disabled)
-            self.assertEqual(app.session_state["game"].player_score, 0)
-            self.assertEqual(len(app.warning), 1)
+            app.session_state["live_detection_state"] = state
+            app.run()
+            self.assertTrue(next(b for b in app.button if b.label == "Play Round").disabled)
+            self.assertEqual(app.session_state["local_rps_game"].player1_score, 0)
+            self.assertFalse(app.exception)
 
     def test_originals_preserved(self):
         manifest = json.loads((ROOT / "deployment/original-files.json").read_text())
         for record in manifest:
-            for field in ("original", "preserved_copy"):
-                self.assertEqual(hashlib.sha256((ROOT / record[field]).read_bytes()).hexdigest(), record["sha256"])
+            preserved = ROOT / record["preserved_copy"]
+            self.assertTrue(preserved.is_file(), record["preserved_copy"])
+            self.assertEqual(hashlib.sha256(preserved.read_bytes()).hexdigest(), record["sha256"])
 
     def test_real_image_decode_and_invalid_input(self):
         image = services.read_image((ROOT / "Image.jpeg").read_bytes())

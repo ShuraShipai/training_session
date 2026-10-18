@@ -1,3 +1,12 @@
-# rock-paper-scissors
+# Rock-Paper-Scissors
 
-Original `rock_paper_scissor.py` and `best.pt` are preserved byte-for-byte. To run the desktop original, change to this directory and run `python rock_paper_scissor.py` with its dependencies and a local camera. The web adapter uses OpenCV BGR decoding, YOLO(best.pt), model(frame), and result.plot(), preserving inference defaults. A separate 60% acceptance gate controls game scoring only; it does not alter model inference or weights.
+Independent Streamlit game using the existing `best.pt` model. The original desktop OpenCV implementation remains in `rock_paper_scissor.py`.
+
+```bash
+cd projects/rock-paper-scissors
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+streamlit run streamlit_app.py --server.port 8604
+```
+
+Use browser camera capture or upload a gesture image. A single Rock/Paper/Scissors detection at 60% confidence or higher must be explicitly confirmed. The computer chooses first; one confirmed round updates the score once. Play Again starts a new round; Reset Score clears all totals. The app loads this directory's original `best.pt`, without training or fallback model substitution.

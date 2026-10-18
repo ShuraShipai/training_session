@@ -1,5 +1,5 @@
 import unittest
-from app.components.game import Game, winner, valid_detection
+from app.components.game import Game, LocalGame, winner, valid_detection, valid_pair
 
 
 class GameTests(unittest.TestCase):
@@ -54,3 +54,58 @@ class GameTests(unittest.TestCase):
     def test_invalid_move(self):
         with self.assertRaises(ValueError):
             winner("Lizard", "Rock")
+
+    def test_live_pair_left_to_right_and_all_outcomes(self):
+        cases = {
+            ("Rock", "Scissors"): "Player 1 Wins",
+            ("Scissors", "Paper"): "Player 1 Wins",
+            ("Paper", "Rock"): "Player 1 Wins",
+            ("Scissors", "Rock"): "Player 2 Wins",
+            ("Paper", "Scissors"): "Player 2 Wins",
+            ("Rock", "Paper"): "Player 2 Wins",
+            ("Rock", "Rock"): "Draw",
+            ("Paper", "Paper"): "Draw",
+            ("Scissors", "Scissors"): "Draw",
+        }
+        for (left_move, right_move), result in cases.items():
+            with self.subTest(left=left_move, right=right_move):
+                game = LocalGame()
+                # Supply in reverse order to verify positional sorting.
+                detections = [(right_move, .91, .8), (left_move, .95, .2)]
+                self.assertEqual(valid_pair(detections)[0][0], left_move)
+                self.assertTrue(game.confirm(detections, game.round_id))
+                self.assertEqual(game.result, result)
+                self.assertEqual(
+                    (game.player1_score, game.player2_score, game.draws),
+                    (int(result == "Player 1 Wins"), int(result == "Player 2 Wins"), int(result == "Draw")),
+                )
+
+    def test_live_pair_rejects_uncertain_invalid_or_ambiguous_frames(self):
+        invalid_frames = (
+            [],
+            [("Rock", .95, .2)],
+            [("Rock", .95, .2), ("Paper", .59, .8)],
+            [("Rock", .95, .2), ("Lizard", .99, .8)],
+            [("Rock", .95, .4), ("Paper", .9, .42)],
+            [("Rock", .95, .2), ("Paper", .9, .8), ("Scissors", .9, .6)],
+        )
+        for detections in invalid_frames:
+            with self.subTest(detections=detections):
+                game = LocalGame()
+                self.assertIsNone(valid_pair(detections))
+                self.assertFalse(game.confirm(detections, game.round_id))
+                self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
+
+    def test_live_round_scores_once_replay_and_reset(self):
+        game = LocalGame()
+        frame_detections = [("Paper", .9, .2), ("Rock", .9, .8)]
+        self.assertTrue(game.confirm(frame_detections, 0))
+        for _ in range(50):
+            self.assertFalse(game.confirm(frame_detections, 0))
+        self.assertEqual(game.player1_score, 1)
+        game.play_again()
+        self.assertFalse(game.completed)
+        self.assertFalse(game.confirm(frame_detections, 0))
+        self.assertTrue(game.confirm(frame_detections, game.round_id))
+        game.reset()
+        self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))

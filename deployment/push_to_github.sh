@@ -6,7 +6,7 @@ set -euo pipefail
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPOSITORY="ShuraShipai/training_session"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-BRANCH="codex/ai-training-lab-${STAMP}"
+BRANCH="${PUBLISH_BRANCH:-codex/ai-training-lab-${STAMP}}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-training-lab-push.XXXXXX")"
 
 cleanup() {
@@ -24,7 +24,11 @@ gh auth setup-git
 echo "Cloning the existing repository and preserving its history..."
 gh repo clone "$REPOSITORY" "$WORK_DIR/repo"
 cd "$WORK_DIR/repo"
-git switch -c "$BRANCH"
+if [[ -n "${PUBLISH_BRANCH:-}" ]]; then
+  git switch --track -c "$BRANCH" "origin/$BRANCH"
+else
+  git switch -c "$BRANCH"
+fi
 
 # Copy the original project sources as well as their organized copies. Never
 # copy the original Roboflow notebook containing a hard-coded API credential.
@@ -107,7 +111,7 @@ if git diff --cached --quiet; then
 fi
 echo "Reviewing the exact branch changes:"
 git diff --cached --stat
-git commit -m "Organize and unify AI training projects"
+git commit -m "Publish extensible AI Training Lab dashboard"
 git push -u origin "$BRANCH"
 echo "Published branch: https://github.com/${REPOSITORY}/tree/${BRANCH}"
 echo "The existing default branch was not changed."
