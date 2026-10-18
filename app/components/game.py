@@ -29,6 +29,63 @@ def valid_detection(detections):
     return label, confidence
 
 
+def valid_pair(detections):
+    """Return two confident gestures ordered left-to-right, or reject the frame."""
+    valid = []
+    for detection in detections:
+        if len(detection) != 3:
+            return None
+        label, confidence, center_x = detection
+        if (label not in MOVES or not math.isfinite(confidence)
+                or not MIN_CONFIDENCE <= confidence <= 1
+                or not math.isfinite(center_x) or not 0 <= center_x <= 1):
+            return None
+        valid.append((label, confidence, center_x))
+    if len(valid) != 2 or abs(valid[0][2] - valid[1][2]) < 0.05:
+        return None
+    left, right = sorted(valid, key=lambda item: item[2])
+    return (left[0], left[1]), (right[0], right[1])
+
+
+@dataclass
+class LocalGame:
+    """Two-person, same-camera game; confirmation can score only once per round."""
+    player1_score: int = 0
+    player2_score: int = 0
+    draws: int = 0
+    round_id: int = 0
+    completed: bool = False
+    player1: Optional[str] = None
+    player2: Optional[str] = None
+    result: Optional[str] = None
+
+    def confirm(self, detections, round_id):
+        pair = valid_pair(detections)
+        if self.completed or round_id != self.round_id or pair is None:
+            return False
+        self.player1, self.player2 = pair[0][0], pair[1][0]
+        outcome = winner(self.player1, self.player2)
+        self.result = {
+            "You Win": "Player 1 Wins",
+            "Computer Wins": "Player 2 Wins",
+            "Draw": "Draw",
+        }[outcome]
+        self.player1_score += self.result == "Player 1 Wins"
+        self.player2_score += self.result == "Player 2 Wins"
+        self.draws += self.result == "Draw"
+        self.completed = True
+        return True
+
+    def play_again(self):
+        self.round_id += 1
+        self.completed = False
+        self.player1 = self.player2 = self.result = None
+
+    def reset(self):
+        self.player1_score = self.player2_score = self.draws = 0
+        self.play_again()
+
+
 @dataclass
 class Game:
     player_score: int = 0

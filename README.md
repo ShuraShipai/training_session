@@ -2,11 +2,11 @@
 
 ## Live Application — Try It Online
 
-The unified dashboard has not yet been deployed and verified. Its public link will be added here after the Streamlit build and feature tests pass.
+The dashboard is live. The continuous two-player camera update is prepared in the repository but is not on the deployed branch until published and rebuilt.
 
 | Application | Live Demo | Source Code |
 |---|---|---|
-| AI Training Lab — Background Removal, Text-to-Speech, Speech-to-Text, and Rock-Paper-Scissors | Pending verification | [Dashboard and pages](app/) |
+| AI Training Lab — Background Removal, Text-to-Speech, Speech-to-Text, and Rock-Paper-Scissors | [Open the dashboard](https://trainingsession.streamlit.app/) | [Dashboard and pages](app/) |
 
 AI Training Lab brings the four training projects together in one Streamlit website. Each feature keeps its existing processing engine and has its own page. The original source scripts and custom YOLO `best.pt` model are preserved.
 
@@ -15,7 +15,7 @@ AI Training Lab brings the four training projects together in one Streamlit webs
 - **Background Removal:** upload an image, remove its background with the existing rembg implementation, preview the transparent result, and download a PNG.
 - **Text-to-Speech:** generate, play, and download gTTS audio in English, Hindi, Kannada, or Tamil.
 - **Speech-to-Text:** record in the browser or upload WAV, then transcribe using the existing SpeechRecognition Google engine and language options.
-- **Rock-Paper-Scissors:** browser camera or image input, existing YOLO `best.pt`, computer move, winner, score, replay, and reset. A single valid detection must be explicitly confirmed to score a round.
+- **Rock-Paper-Scissors:** live browser camera, existing YOLO `best.pt`, two players in front of one laptop, detected moves, winner, scores, replay, and reset. Both confident gestures must be present; press **Play Round** to score once. Video frames never score by themselves.
 
 ## Add another page
 
@@ -38,8 +38,8 @@ Background removal downloads rembg's default model weights on first use. YOLO/Py
 
 The intended public target is one Streamlit Community Cloud app from `app/main.py`, using the root `requirements.txt`. Its Home page links to all four projects; adding a page under `app/pages/` extends the same app. Community Cloud can sleep after inactivity and has limited CPU and memory, so verify model startup and inference before publishing the URL.
 
-The existing repository is [ShuraShipai/training_session](https://github.com/ShuraShipai/training_session). Deployment should use the latest branch containing `app/main.py` and all project files. The Codex workspace cannot reach GitHub or Streamlit Cloud, so it has not verified a commit or deployment. See [deployment notes](deployment/README.md) and the [test report](deployment/TEST_REPORT.md).
+The existing repository is [ShuraShipai/training_session](https://github.com/ShuraShipai/training_session). The current live app was deployed from branch `codex/ai-training-lab-20261018-101637`. The updated live-camera game needs to be pushed to that branch and rebuilt before it appears online. See [deployment notes](deployment/README.md) and the [test report](deployment/TEST_REPORT.md).
 
 ngrok remains available for local demonstrations: `./deployment/start_four_apps.sh` exposes the independent project apps, not the unified dashboard. For the dashboard, start `streamlit run app/main.py` and expose its port with ngrok separately. The Free ngrok plan allows up to three simultaneous endpoints.
 
-Browser camera and microphone use require visitor permission. For local OpenCV access, allow the terminal or IDE under macOS **System Settings → Privacy & Security → Camera**.
+The live game uses WebRTC, so allow camera access in your browser when prompted. Its public camera stream requires HTTPS and a network that permits WebRTC; some restricted networks may also require a TURN server.

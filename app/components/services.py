@@ -115,3 +115,23 @@ def detect_gesture(data):
                       for box in result.boxes]
         annotated = result.plot()
     return detections, annotated
+
+
+def detect_live_gestures(frame):
+    """Run the preserved YOLO inference pipeline on one live BGR camera frame."""
+    if getattr(frame, "ndim", None) != 3 or frame.shape[2] != 3:
+        raise ValueError("Expected a BGR video frame.")
+    with inference_lock():
+        model = gesture_model()
+        result = model(frame)[0]  # Same model, preprocessing, labels, and inference defaults.
+        detections = []
+        frame_width = frame.shape[1]
+        for box in result.boxes:
+            x1, _, x2, _ = box.xyxy[0].tolist()
+            detections.append((
+                result.names[int(box.cls.item())],
+                float(box.conf.item()),
+                ((x1 + x2) / 2) / frame_width,
+            ))
+        annotated = result.plot()
+    return detections, annotated

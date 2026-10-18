@@ -6,7 +6,7 @@ set -euo pipefail
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPOSITORY="ShuraShipai/training_session"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-BRANCH="codex/ai-training-lab-${STAMP}"
+BRANCH="${PUBLISH_BRANCH:-codex/ai-training-lab-${STAMP}}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-training-lab-push.XXXXXX")"
 
 cleanup() {
@@ -24,11 +24,15 @@ gh auth setup-git
 echo "Cloning the existing repository and preserving its history..."
 gh repo clone "$REPOSITORY" "$WORK_DIR/repo"
 cd "$WORK_DIR/repo"
-git switch -c "$BRANCH"
+if [[ -n "${PUBLISH_BRANCH:-}" ]]; then
+  git switch --track -c "$BRANCH" "origin/$BRANCH"
+else
+  git switch -c "$BRANCH"
+fi
 
 # Copy the original project sources as well as their organized copies. Never
 # copy the original Roboflow notebook containing a hard-coded API credential.
-export SOURCE_DIR WORK_DIR
+export SOURCE_DIR WORK_DIR STAMP
 python3 - <<'PY'
 from pathlib import Path
 import os, shutil
@@ -51,7 +55,7 @@ allowed = [
 excluded = {
     "notebooks/original-colab-notebooks/paper_scissor_stone.ipynb",
 }
-backup_root = repo / "backups/pre-ai-training-lab"
+backup_root = repo / "backups" / f"pre-ai-training-lab-{os.environ.get('STAMP', 'snapshot')}"
 conflicts = []
 copied = 0
 
@@ -75,7 +79,7 @@ for relative in allowed:
             backup.parent.mkdir(parents=True, exist_ok=True)
             if not backup.exists():
                 shutil.copy2(target, backup)
-                print(f"Preserved previous remote file: backups/pre-ai-training-lab/{rel}")
+                print(f"Preserved previous remote file: {backup.relative_to(repo).as_posix()}")
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(file, target)
         copied += 1

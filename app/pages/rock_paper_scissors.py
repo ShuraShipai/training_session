@@ -1,65 +1,75 @@
-import hashlib
+"""Live two-player Rock-Paper-Scissors using the preserved YOLO checkpoint."""
 import streamlit as st
-from app.components.game import Game, MIN_CONFIDENCE, valid_detection
-from app.components.services import detect_gesture
+
+from app.components.game import LocalGame, MIN_CONFIDENCE, valid_pair
+from app.components.live_game import LiveDetectionState, make_video_callback
+
 
 st.title("Rock-Paper-Scissors")
-st.write("Capture one hand, check the detection, then confirm your round.")
-if "game" not in st.session_state:
-    st.session_state.game = Game()
-game = st.session_state.game
-for column, label, value in zip(st.columns(3), ["Player", "Computer", "Draws"],
-                                [game.player_score, game.computer_score, game.draws]):
+st.subheader("Live two-player game")
+st.write("Play together in front of one camera. Player 1 stands on the left; Player 2 on the right.")
+
+if "local_rps_game" not in st.session_state:
+    st.session_state.local_rps_game = LocalGame()
+if "live_detection_state" not in st.session_state:
+    st.session_state.live_detection_state = LiveDetectionState()
+
+game = st.session_state.local_rps_game
+state = st.session_state.live_detection_state
+
+for column, label, value in zip(
+    st.columns(3),
+    ["Player 1", "Player 2", "Draws"],
+    [game.player1_score, game.player2_score, game.draws],
+):
     column.metric(label, value)
 
-
-def advance(reset=False):
-    if reset:
-        game.reset()
-    else:
-        game.play_again()
-    st.session_state.pop("gesture_preview", None)
-    for name in list(st.session_state):
-        if name.startswith(("camera_round_", "upload_round_")):
-            del st.session_state[name]
-
-
-st.button("Reset Score", on_click=advance, args=(True,))
+top_controls = st.columns([1, 1, 4])
+top_controls[0].button("Reset Score", on_click=game.reset)
 if game.completed:
-    st.success(game.result)
-    st.write(f"Your move: **{game.player}** · Computer move: **{game.computer}**")
-    preview = st.session_state.get("gesture_preview")
-    if preview:
-        st.caption(f"Detection confidence: {preview[1][0][1]:.0%}")
-        st.image(preview[2], channels="BGR", width="stretch")
-    st.button("Play Again", type="primary", on_click=advance)
+    top_controls[1].button("Play Again", type="primary", on_click=game.play_again)
+
+try:
+    from streamlit_webrtc import webrtc_streamer
+except ImportError:
+    st.error("Live camera support is not installed yet. Redeploy after adding streamlit-webrtc.")
 else:
-    method = st.radio("Gesture input", ["Camera", "Upload image"], horizontal=True)
-    if method == "Camera":
-        upload = st.camera_input("Capture your gesture", key=f"camera_round_{game.round_id}")
-        st.caption("Allow camera access, then take a picture. You can also upload a photo.")
-    else:
-        upload = st.file_uploader("Choose a gesture photo", type=["jpg", "jpeg", "png", "webp"], key=f"upload_round_{game.round_id}")
-    st.caption(f"Show one gesture clearly. A single detection with at least {MIN_CONFIDENCE:.0%} confidence is required. The computer has already chosen its move.")
-    if upload is not None:
-        data = upload.getvalue()
-        key = (game.round_id, method, hashlib.sha256(data).hexdigest())
-        if st.button("Detect gesture", type="primary"):
-            st.session_state.pop("gesture_preview", None)
-            try:
-                with st.spinner("Detecting your gesture…"):
-                    detections, image = detect_gesture(data)
-                    st.session_state.gesture_preview = (key, detections, image)
-            except Exception:
-                st.error("Detection failed. Check the image and the server's original best.pt model and dependencies. No points were awarded.")
-        preview = st.session_state.get("gesture_preview")
-        if preview and preview[0] == key:
-            st.image(preview[2], channels="BGR", width="stretch")
-            detection = valid_detection(preview[1])
-            for label, confidence in preview[1]:
-                st.write(f"Detected: **{label}** · Confidence: **{confidence:.0%}**")
-            if detection is None:
-                st.warning("No single confident gesture found. Capture one clearly visible hand and try again. No points awarded.")
-            if st.button("Confirm round", disabled=detection is None):
-                if game.confirm(preview[1], key[0]):
-                    st.rerun()
+    st.caption(
+        f"Live detection runs continuously. Show one clear hand each, one on either side. "
+        f"Both gestures need at least {MIN_CONFIDENCE:.0%} confidence."
+    )
+    webrtc_streamer(
+        key="local-two-player-rps-camera",
+        video_frame_callback=make_video_callback(state),
+        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
+
+    @st.fragment(run_every=0.5)
+    def live_round_controls():
+        detections, error, fresh = state.snapshot()
+        pair = valid_pair(detections)
+        if error:
+            st.error(f"Live detection error: {error}")
+        if not fresh:
+            st.info("Waiting for live camera detections…")
+        elif pair:
+            left, right = pair
+            player1, player2 = st.columns(2)
+            player1.metric("Player 1 · left", left[0], f"{left[1]:.0%} confidence")
+            player2.metric("Player 2 · right", right[0], f"{right[1]:.0%} confidence")
+        else:
+            st.info("Show exactly two clear gestures at the same time, one on each side of the camera.")
+
+        if game.completed:
+            st.success(game.result)
+            st.write(f"Player 1: **{game.player1}** · Player 2: **{game.player2}**")
+            st.caption("This round is locked. Choose Play Again when you are ready.")
+        elif st.button("Play Round", type="primary", disabled=pair is None):
+            if game.confirm(detections, game.round_id):
+                st.rerun()
+            else:
+                st.warning("The camera no longer has two fresh, confident gestures. No points awarded.")
+
+    live_round_controls()

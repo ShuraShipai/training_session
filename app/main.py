@@ -19,7 +19,7 @@ PAGE_DETAILS = {
         "Speech-to-Text", "Record or upload audio and take away a transcript.", "Transcribe audio", "speech-to-text"
     ),
     "rock_paper_scissors": (
-        "Rock-Paper-Scissors", "Show your hand. Confirm your move. Play a round.", "Play the game", "rock-paper-scissors"
+        "Rock-Paper-Scissors", "Play a live two-player game together in front of one camera.", "Play the game", "rock-paper-scissors"
     ),
 }
 

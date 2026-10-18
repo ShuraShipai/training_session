@@ -14,7 +14,15 @@ The Home page and sidebar provide all four project pages. New `.py` files added 
 
 Community Cloud supports multiple app pages and gives the app approximately up to 2 CPU cores and 2.7 GB RAM. It sleeps after 12 hours without traffic. The existing YOLO checkpoint is 6.2 MB; local CPU inference on the provided image peaked around 375 MiB process RSS. This suggests single-model inference is within the memory ceiling, but the complete app needs an actual Cloud build and real processing checks. rembg downloads its default U²-Net weights on first use, and YOLO/PyTorch adds a substantial install. The two models are loaded lazily, so users incur their memory only when using the relevant project. These estimates do not replace Cloud measurements.
 
-Text-to-Speech and Speech-to-Text send requests to Google's services and require outbound network access. Browser camera and microphone capture use HTTPS and require visitor permission. Free Cloud apps may hibernate; a fixed URL is not an uptime guarantee.
+Text-to-Speech and Speech-to-Text send requests to Google's services and require outbound network access. The RPS page uses `streamlit-webrtc` for a continuous browser camera stream; allow camera access when prompted. WebRTC needs HTTPS and STUN/TURN connectivity. The page uses Google's public STUN server; some networks may also require TURN, which must be configured separately. Inference is throttled to about three frames per second on the server CPU. Free Cloud apps may hibernate; a fixed URL is not an uptime guarantee.
+
+To publish later fixes to the already deployed dashboard branch, run this from the project directory on the Mac terminal that has GitHub CLI authorization:
+
+```bash
+PUBLISH_BRANCH=codex/ai-training-lab-20261018-101637 ./deployment/push_to_github.sh
+```
+
+The script checks out that existing remote branch and makes a normal fast-forward push (no force push). Streamlit Community Cloud should then rebuild the app from its watched branch.
 
 ## ngrok local alternative
 
@@ -35,4 +43,4 @@ ngrok Free permits up to three online endpoints. Its public URLs only work while
 
 ## Publication status
 
-The GitHub web UI has shown a successful push to `codex/ai-training-lab-20261018-093909`, but that earlier branch did not contain the later independent app entry points. The Codex execution environment still reports an invalid GitHub CLI token and cannot resolve `github.com`; it also has no local `.git` checkout. No current commit or Streamlit Cloud URL is verified from this environment. Publish the latest workspace state on a branch, select that branch for `app/main.py`, and add a URL to README only after the deployment opens and its four features pass real tests.
+The user verified the app at [trainingsession.streamlit.app](https://trainingsession.streamlit.app/) and successfully published branch `codex/ai-training-lab-20261018-101637`. The deployed version currently shows the still-photo RPS interface. The live two-player WebRTC update is local and must be pushed to that same branch using the command above; Cloud will rebuild it afterward.
