@@ -8,6 +8,7 @@
     html, body { width: 100%; margin: 0; background: #101512; color: #f7faf7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .camera-shell { width: 100%; position: relative; overflow: hidden; background: #101512; }
     video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; background: #101512; }
+    .stopped-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #101512; }
     .divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; transform: translateX(-50%); background: #55c58a; pointer-events: none; }
     .label { position: absolute; top: 14px; padding: 7px 11px; border-radius: 5px; background: rgba(16, 21, 18, .82); color: #fff; font-size: 14px; font-weight: 700; letter-spacing: .04em; pointer-events: none; }
     .left { left: 14px; } .right { right: 14px; }
@@ -23,6 +24,7 @@
 <body>
   <div class="camera-shell">
     <video id="camera" autoplay playsinline muted></video>
+    <img id="stopped-frame" class="stopped-frame hidden" alt="Last camera frame; camera is stopped" />
     <div class="divider" aria-hidden="true"></div>
     <div class="label left">PLAYER 1 · LEFT</div>
     <div class="label right">PLAYER 2 · RIGHT</div>
@@ -35,6 +37,7 @@
   <canvas id="capture" class="hidden"></canvas>
   <script>
     const video = document.getElementById("camera");
+    const stoppedFrame = document.getElementById("stopped-frame");
     const canvas = document.getElementById("capture");
     const statusBox = document.getElementById("status");
     const startButton = document.getElementById("start");
@@ -68,6 +71,13 @@
     function stopCamera() {
       if (timer) window.clearInterval(timer);
       timer = null;
+      if (stream && video.videoWidth && video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d", { alpha: false }).drawImage(video, 0, 0);
+        stoppedFrame.src = canvas.toDataURL("image/jpeg", 0.8);
+        stoppedFrame.classList.remove("hidden");
+      }
       if (stream) stream.getTracks().forEach(track => track.stop());
       stream = null;
       video.srcObject = null;
@@ -83,6 +93,7 @@
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: false
         });
+        stoppedFrame.classList.add("hidden");
         video.srcObject = stream;
         await video.play();
         startButton.classList.add("hidden");
