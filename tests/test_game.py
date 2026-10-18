@@ -1,5 +1,5 @@
 import unittest
-from app.components.game import Game, LocalGame, winner, valid_detection, valid_pair
+from app.components.game import Game, LiveRoundTracker, LocalGame, winner, valid_detection, valid_pair
 
 
 class GameTests(unittest.TestCase):
@@ -119,3 +119,24 @@ class GameTests(unittest.TestCase):
         self.assertTrue(game.confirm(frame_detections, game.round_id))
         game.reset()
         self.assertEqual((game.player1_score, game.player2_score, game.draws), (0, 0, 0))
+
+    def test_live_tracker_scores_stable_pair_and_rearms_after_hands_lower(self):
+        game = LocalGame()
+        tracker = LiveRoundTracker()
+        pair = [("Paper", .91, .2), ("Rock", .86, .8)]
+        self.assertEqual(tracker.update(game, pair, 0.0), "countdown")
+        self.assertEqual(tracker.update(game, pair, 0.4), "countdown")
+        self.assertEqual(tracker.update(game, pair, 0.8), "scored")
+        self.assertEqual((game.player1_score, game.player2_score, game.draws), (1, 0, 0))
+        for index in range(3):
+            self.assertEqual(tracker.update(game, pair, 1.2 + index * .4), "round-complete")
+        self.assertEqual(game.player1_score, 1)
+        for index in range(4):
+            status = tracker.update(game, [], 3.0 + index * .4)
+        self.assertEqual(status, "ready")
+        self.assertFalse(game.completed)
+        self.assertEqual(game.round_id, 1)
+        for index in range(3):
+            status = tracker.update(game, pair, 4.8 + index * .4)
+        self.assertEqual(status, "scored")
+        self.assertEqual(game.player1_score, 2)

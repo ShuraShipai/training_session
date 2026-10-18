@@ -97,6 +97,67 @@ class LocalGame:
 
 
 @dataclass
+class LiveRoundTracker:
+    """Debounce live predictions and score one round per pair of hand gestures."""
+    stable_moves: Optional[tuple] = None
+    stable_frames: int = 0
+    completed_at: Optional[float] = None
+    neutral_frames: int = 0
+    last_round: Optional[tuple] = None
+
+    def reset_candidate(self):
+        self.stable_moves = None
+        self.stable_frames = 0
+
+    def update(self, game, detections, now, *, frames_to_score=3,
+               frames_to_rearm=4, seconds_to_rearm=2.0):
+        """Consume one new frame; auto-score steady pairs and rearm on release."""
+        pair = valid_pair(detections)
+        confident_hand_present = any(
+            len(detection) == 3
+            and detection[0] in MOVES
+            and math.isfinite(detection[1])
+            and MIN_CONFIDENCE <= detection[1] <= 1
+            and math.isfinite(detection[2])
+            and 0 <= detection[2] <= 1
+            for detection in detections
+        )
+
+        if game.completed:
+            if confident_hand_present:
+                self.neutral_frames = 0
+            else:
+                self.neutral_frames += 1
+            if (self.neutral_frames >= frames_to_rearm
+                    and self.completed_at is not None
+                    and now - self.completed_at >= seconds_to_rearm):
+                game.play_again()
+                self.completed_at = None
+                self.neutral_frames = 0
+                self.reset_candidate()
+                return "ready"
+            return "round-complete"
+
+        self.neutral_frames = 0
+        if pair is None:
+            self.reset_candidate()
+            return "waiting"
+
+        moves = (pair[0][0], pair[1][0])
+        if moves == self.stable_moves:
+            self.stable_frames += 1
+        else:
+            self.stable_moves = moves
+            self.stable_frames = 1
+
+        if self.stable_frames >= frames_to_score and game.confirm(detections, game.round_id):
+            self.completed_at = now
+            self.last_round = (game.result, game.player1, game.player2)
+            return "scored"
+        return "countdown"
+
+
+@dataclass
 class Game:
     player_score: int = 0
     computer_score: int = 0
